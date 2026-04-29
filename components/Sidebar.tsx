@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { usePathname } from 'next/navigation'
+import { signOut } from '@/app/actions/auth'
 import type { User } from '@/types'
 
 const navItems = [
@@ -23,14 +23,6 @@ const adminNavItems = [
 
 export default function Sidebar({ user }: { user: User | null }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
-
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
 
   return (
     <aside className="w-60 bg-[#1A1A1A] flex flex-col h-screen flex-shrink-0">
@@ -98,12 +90,14 @@ export default function Sidebar({ user }: { user: User | null }) {
             <div className="text-gray-500 text-xs capitalize">{user?.role?.replace('_', ' ') ?? ''}</div>
           </div>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="w-full text-left text-gray-500 hover:text-white text-xs px-2 py-1.5 rounded hover:bg-white/10 transition"
-        >
-          Sign out
-        </button>
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="w-full text-left text-gray-500 hover:text-white text-xs px-2 py-1.5 rounded hover:bg-white/10 transition"
+          >
+            Sign out
+          </button>
+        </form>
       </div>
     </aside>
   )
