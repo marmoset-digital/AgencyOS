@@ -43,7 +43,7 @@ export default function LoginPage() {
                 name="email"
                 required
                 placeholder="you@marmoset.com.au"
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#E8611A] focus:border-transparent transition"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#E8611A] focus:border-transparent transition"
               />
             </div>
 
@@ -56,7 +56,7 @@ export default function LoginPage() {
                 name="password"
                 required
                 placeholder="••••••••"
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#E8611A] focus:border-transparent transition"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#E8611A] focus:border-transparent transition"
               />
             </div>
 
