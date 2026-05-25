@@ -76,3 +76,23 @@ export default function NewClientPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Billing Address</label>
             <input name="billing_address" className="input" placeholder="123 Example St, Melbourne VIC 3000" />
           </div>
+
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes</label>
+            <textarea name="notes" rows={4} className="input resize-none" placeholder="Internal notes about this client…" />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <button
+            type="submit"
+            className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
+          >
+            Save Client
+          </button>
+          <Link href="/clients" className="text-sm text-gray-500 hover:text-gray-700">Cancel</Link>
+        </div>
+      </form>
+    </div>
+  )
+}
