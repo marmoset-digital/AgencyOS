@@ -9,7 +9,7 @@ export default function NewClientPage() {
         <h1 className="text-2xl font-bold text-gray-900">Add New Client</h1>
       </div>
 
-      <form action={createCompany} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <form action={createCompany as any} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div className="grid grid-cols-2 gap-5">
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Company Name *</label>
@@ -76,23 +76,3 @@ export default function NewClientPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Billing Address</label>
             <input name="billing_address" className="input" placeholder="123 Example St, Melbourne VIC 3000" />
           </div>
-
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes</label>
-            <textarea name="notes" rows={4} className="input resize-none" placeholder="Internal notes about this client…" />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <button
-            type="submit"
-            className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
-          >
-            Save Client
-          </button>
-          <Link href="/clients" className="text-sm text-gray-500 hover:text-gray-700">Cancel</Link>
-        </div>
-      </form>
-    </div>
-  )
-}
