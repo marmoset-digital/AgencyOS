@@ -41,12 +41,20 @@ export default async function ClientsPage({
           <h1 className="text-2xl font-bold text-gray-900">Clients & CRM</h1>
           <p className="text-gray-500 mt-1">{companies?.length ?? 0} companies</p>
         </div>
-        <Link
-          href="/clients/new"
-          className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
-        >
-          + Add Client
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/clients/import"
+            className="border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-gray-900 text-sm font-medium px-4 py-2.5 rounded-lg transition"
+          >
+            ↑ Import CSV
+          </Link>
+          <Link
+            href="/clients/new"
+            className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+          >
+            + Add Client
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
