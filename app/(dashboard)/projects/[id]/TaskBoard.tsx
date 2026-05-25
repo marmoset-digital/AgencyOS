@@ -1,0 +1,251 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { createTask, updateTaskStatus, deleteTask } from '@/app/actions/projects'
+import type { Task, User } from '@/types'
+
+const PRIORITY_COLOURS: Record<string, string> = {
+  high:   'bg-red-100 text-red-700',
+  medium: 'bg-yellow-100 text-yellow-700',
+  low:    'bg-gray-100 text-gray-600',
+}
+
+const STATUS_COLUMNS = [
+  { key: 'todo',        label: 'To Do',       colour: 'bg-gray-100', dot: 'bg-gray-400' },
+  { key: 'in_progress', label: 'In Progress',  colour: 'bg-blue-50',  dot: 'bg-blue-500' },
+  { key: 'done',        label: 'Done',         colour: 'bg-green-50', dot: 'bg-green-500' },
+] as const
+
+type TaskStatus = 'todo' | 'in_progress' | 'done'
+
+interface Props {
+  tasks: Task[]
+  projectId: string
+  companyId: string
+  users: User[]
+}
+
+function formatDue(date?: string) {
+  if (!date) return null
+  const d = new Date(date)
+  const now = new Date()
+  const diff = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const label = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  if (diff < 0) return <span className="text-red-600 text-xs font-medium">⚠ {label}</span>
+  if (diff <= 3) return <span className="text-orange-600 text-xs font-medium">⏰ {label}</span>
+  return <span className="text-gray-400 text-xs">{label}</span>
+}
+
+export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users }: Props) {
+  const [view, setView] = useState<'list' | 'kanban'>('list')
+  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  function handleStatusChange(taskId: string, newStatus: TaskStatus) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
+    startTransition(async () => {
+      await updateTaskStatus(taskId, newStatus, projectId)
+    })
+  }
+
+  function handleDelete(taskId: string) {
+    if (!confirm('Delete this task?')) return
+    setTasks(prev => prev.filter(t => t.id !== taskId))
+    startTransition(async () => {
+      await deleteTask(taskId, projectId)
+    })
+  }
+
+  const tasksByStatus = {
+    todo: tasks.filter(t => t.status === 'todo'),
+    in_progress: tasks.filter(t => t.status === 'in_progress'),
+    done: tasks.filter(t => t.status === 'done'),
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setView('list')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+              view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            ☰ List
+          </button>
+          <button
+            onClick={() => setView('kanban')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+              view === 'kanban' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            ⊞ Board
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">
+            {tasks.filter(t => t.status === 'done').length} / {tasks.length} done
+          </span>
+          <button
+            onClick={() => setShowAddForm(v => !v)}
+            className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
+          >
+            + Add Task
+          </button>
+        </div>
+      </div>
+
+      {showAddForm && (
+        <form
+          action={async (fd) => {
+            fd.append('project_id', projectId)
+            fd.append('company_id', companyId)
+            await createTask(fd)
+            setShowAddForm(false)
+          }}
+          className="bg-white border border-[#E8611A] rounded-xl p-4 mb-4"
+        >
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="col-span-2">
+              <input name="title" required autoFocus className="input" placeholder="Task title *" />
+            </div>
+            <div>
+              <select name="priority" className="input text-sm">
+                <option value="medium">Medium priority</option>
+                <option value="high">High priority</option>
+                <option value="low">Low priority</option>
+              </select>
+            </div>
+            <div>
+              <select name="assignee_id" className="input text-sm">
+                <option value="">Unassigned</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <input name="due_date" type="date" className="input text-sm" />
+            </div>
+            <div>
+              <input name="time_estimate" type="number" min="0" step="15" className="input text-sm" placeholder="Est. minutes (e.g. 60)" />
+            </div>
+            <div className="col-span-2">
+              <textarea name="description" rows={2} className="input resize-none text-sm" placeholder="Description (optional)" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="submit" disabled={isPending} className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
+              Add Task
+            </button>
+            <button type="button" onClick={() => setShowAddForm(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {view === 'list' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {tasks.length === 0 ? (
+            <div className="py-12 text-center text-gray-400 text-sm">No tasks yet — add the first one above.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left px-5 py-3 font-medium text-gray-500 w-8"></th>
+                  <th className="text-left px-5 py-3 font-medium text-gray-500">Task</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Priority</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Assignee</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Due</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map(task => (
+                  <tr key={task.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition group">
+                    <td className="px-5 py-3.5">
+                      <input
+                        type="checkbox"
+                        checked={task.status === 'done'}
+                        onChange={() => handleStatusChange(task.id, task.status === 'done' ? 'todo' : 'done')}
+                        className="w-4 h-4 rounded accent-[#E8611A] cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</div>
+                      {task.description && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</div>}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-gray-600 text-xs">{(task as any).assignee?.full_name ?? '—'}</td>
+                    <td className="px-4 py-3.5">{formatDue(task.due_date)}</td>
+                    <td className="px-4 py-3.5">
+                      <select
+                        value={task.status}
+                        onChange={e => handleStatusChange(task.id, e.target.value as TaskStatus)}
+                        className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-[#E8611A]"
+                      >
+                        <option value="todo">To Do</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="done">Done</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <button onClick={() => handleDelete(task.id)} className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {view === 'kanban' && (
+        <div className="grid grid-cols-3 gap-4">
+          {STATUS_COLUMNS.map(col => (
+            <div key={col.key} className="flex flex-col gap-2">
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${col.colour}`}>
+                <span className={`w-2 h-2 rounded-full ${col.dot}`} />
+                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{col.label}</span>
+                <span className="ml-auto text-xs text-gray-500">{tasksByStatus[col.key].length}</span>
+              </div>
+              <div className="flex flex-col gap-2 min-h-[120px]">
+                {tasksByStatus[col.key].length === 0 && (
+                  <div className="border-2 border-dashed border-gray-200 rounded-lg h-16 flex items-center justify-center text-xs text-gray-400">No tasks</div>
+                )}
+                {tasksByStatus[col.key].map(task => (
+                  <div key={task.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition group">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <p className="text-sm font-medium text-gray-900 leading-snug">{task.title}</p>
+                      <button onClick={() => handleDelete(task.id)} className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition flex-shrink-0">✕</button>
+                    </div>
+                    {task.description && <p className="text-xs text-gray-400 mb-2 line-clamp-2">{task.description}</p>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>
+                      {task.due_date && formatDue(task.due_date)}
+                      {(task as any).assignee && <span className="text-xs text-gray-400 ml-auto">{(task as any).assignee.full_name.split(' ')[0]}</span>}
+                    </div>
+                    <div className="flex gap-1 mt-3 pt-2 border-t border-gray-100">
+                      {col.key !== 'todo' && (
+                        <button onClick={() => handleStatusChange(task.id, col.key === 'done' ? 'in_progress' : 'todo')} className="text-xs text-gray-400 hover:text-gray-700 transition">← Back</button>
+                      )}
+                      {col.key !== 'done' && (
+                        <button onClick={() => handleStatusChange(task.id, col.key === 'todo' ? 'in_progress' : 'done')} className="text-xs text-[#E8611A] hover:text-[#d45516] font-medium transition ml-auto">
+                          {col.key === 'todo' ? 'Start →' : 'Complete ✓'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
