@@ -1,0 +1,188 @@
+import { createClient } from '@/lib/supabase/server'
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import TaskBoard from './TaskBoard'
+import { PROJECT_STAGES } from '@/types'
+
+const stageColours: Record<string, string> = {
+  quote_sent:          'bg-purple-100 text-purple-700',
+  proposal_accepted:   'bg-blue-100 text-blue-700',
+  onboarding:          'bg-yellow-100 text-yellow-700',
+  active:              'bg-green-100 text-green-700',
+  awaiting_feedback:   'bg-orange-100 text-orange-700',
+  paused:              'bg-gray-100 text-gray-600',
+  complete:            'bg-teal-100 text-teal-700',
+  invoiced_closed:     'bg-gray-100 text-gray-500',
+}
+
+const stageLabels: Record<string, string> = Object.fromEntries(
+  PROJECT_STAGES.map(s => [s.value, s.label])
+)
+
+export default async function ProjectDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const supabase = await createClient()
+
+  // Fetch project with related data
+  const { data: project } = await supabase
+    .from('projects')
+    .select(`
+      *,
+      companies:company_id ( id, name, status, website ),
+      assigned_user:assigned_to ( id, full_name, role )
+    `)
+    .eq('id', id)
+    .single()
+
+  if (!project) notFound()
+
+  // Fetch tasks with assignee
+  const { data: tasks } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      assignee:assignee_id ( id, full_name )
+    `)
+    .eq('project_id', id)
+    .order('created_at', { ascending: true })
+
+  // Fetch users for task assignment
+  const { data: users } = await supabase
+    .from('users')
+    .select('id, full_name, role')
+    .order('full_name', { ascending: true })
+
+  // Stats
+  const totalTasks = tasks?.length ?? 0
+  const doneTasks = tasks?.filter(t => t.status === 'done').length ?? 0
+  const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
+
+  const formattedStart = project.start_date
+    ? new Date(project.start_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null
+  const formattedEnd = project.end_date
+    ? new Date(project.end_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null
+
+  return (
+    <div className="p-8">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-sm text-gray-400 mb-5">
+        <Link href="/projects" className="hover:text-gray-600">Projects</Link>
+        <span>/</span>
+        {project.companies && (
+          <>
+            <Link href={`/clients/${project.companies.id}`} className="hover:text-gray-600">
+              {project.companies.name}
+            </Link>
+            <span>/</span>
+          </>
+        )}
+        <span className="text-gray-700 font-medium">{project.name}</span>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${stageColours[project.stage] ?? 'bg-gray-100'}`}>
+              {stageLabels[project.stage] ?? project.stage}
+            </span>
+            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 capitalize">
+              {project.type === 'retainer' ? '🔁 Retainer' : '📌 One-off'}
+            </span>
+          </div>
+          {project.description && (
+            <p className="text-gray-500 text-sm">{project.description}</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 ml-4">
+          <Link
+            href={`/projects/${id}/edit`}
+            className="border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-gray-900 text-sm font-medium px-4 py-2 rounded-lg transition"
+          >
+            Edit
+          </Link>
+        </div>
+      </div>
+
+      {/* Meta cards */}
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-400 mb-1">Client</div>
+          <div className="font-medium text-gray-900 text-sm">
+            {project.companies ? (
+              <Link href={`/clients/${project.companies.id}`} className="text-[#E8611A] hover:underline">
+                {project.companies.name}
+              </Link>
+            ) : '—'}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-400 mb-1">Assigned To</div>
+          <div className="font-medium text-gray-900 text-sm">
+            {project.assigned_user?.full_name ?? <span className="text-gray-400">Unassigned</span>}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-400 mb-1">Timeline</div>
+          <div className="font-medium text-gray-900 text-sm">
+            {formattedStart && formattedEnd
+              ? `${formattedStart} → ${formattedEnd}`
+              : formattedEnd
+              ? `Due ${formattedEnd}`
+              : formattedStart
+              ? `Started ${formattedStart}`
+              : <span className="text-gray-400">No dates set</span>}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-400 mb-2">Progress</div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-gray-100 rounded-full h-2">
+              <div
+                className="bg-[#E8611A] h-2 rounded-full transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="text-sm font-semibold text-gray-700">{progress}%</span>
+          </div>
+          <div className="text-xs text-gray-400 mt-1">{doneTasks} of {totalTasks} tasks done</div>
+        </div>
+      </div>
+
+      {/* Retainer caps */}
+      {project.type === 'retainer' && (project.monthly_hours_cap || project.monthly_tasks_cap) && (
+        <div className="flex items-center gap-4 mb-6 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 text-sm text-blue-700">
+          <span>📋 Retainer caps this month:</span>
+          {project.monthly_hours_cap && (
+            <span className="font-medium">{project.monthly_hours_cap} hours</span>
+          )}
+          {project.monthly_tasks_cap && (
+            <span className="font-medium">{project.monthly_tasks_cap} tasks</span>
+          )}
+        </div>
+      )}
+
+      {/* Tasks section */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Tasks</h2>
+        <TaskBoard
+          tasks={(tasks ?? []) as any}
+          projectId={id}
+          companyId={project.company_id}
+          users={(users ?? []) as any}
+        />
+      </div>
+    </div>
+  )
+}
