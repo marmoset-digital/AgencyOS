@@ -32,7 +32,7 @@ export default async function EditContactPage({
         <h1 className="text-2xl font-bold text-gray-900">Edit Contact</h1>
       </div>
 
-      <form action={action} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <form action={action as any} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div className="grid grid-cols-2 gap-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
