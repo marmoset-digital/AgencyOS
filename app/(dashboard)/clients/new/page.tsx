@@ -73,8 +73,33 @@ export default function NewClientPage() {
           </div>
 
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Billing Address</label>
-            <input name="billing_address" className="input" placeholder="123 Example St, Melbourne VIC 3000" />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Street Address</label>
+            <input name="address" className="input" placeholder="123 Example St" />
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Suburb</label>
+            <input name="suburb" className="input" placeholder="Melbourne" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">State</label>
+            <select name="state" className="input">
+              <option value="">— Select —</option>
+              <option value="VIC">VIC</option>
+              <option value="NSW">NSW</option>
+              <option value="QLD">QLD</option>
+              <option value="WA">WA</option>
+              <option value="SA">SA</option>
+              <option value="TAS">TAS</option>
+              <option value="ACT">ACT</option>
+              <option value="NT">NT</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Postcode</label>
+            <input name="postcode" className="input" placeholder="3000" maxLength={4} />
           </div>
 
           <div className="col-span-2">
