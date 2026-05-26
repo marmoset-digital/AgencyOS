@@ -1,5 +1,6 @@
 'use client'
 
+import { useTransition } from 'react'
 import { deleteContact } from '@/app/actions/clients'
 
 export function DeleteContactButton({
@@ -9,19 +10,23 @@ export function DeleteContactButton({
   contactId: string
   companyId: string
 }) {
-  const deleteAction = deleteContact.bind(null, contactId, companyId)
+  const [isPending, startTransition] = useTransition()
+
+  function handleDelete() {
+    if (!confirm('Delete this contact?')) return
+    startTransition(() => {
+      deleteContact(contactId, companyId)
+    })
+  }
 
   return (
-    <form action={deleteAction}>
-      <button
-        type="submit"
-        className="text-xs text-red-400 hover:text-red-600 transition"
-        onClick={(e) => {
-          if (!confirm('Delete this contact?')) e.preventDefault()
-        }}
-      >
-        Delete
-      </button>
-    </form>
+    <button
+      type="button"
+      onClick={handleDelete}
+      disabled={isPending}
+      className="text-xs text-red-400 hover:text-red-600 transition disabled:opacity-50"
+    >
+      {isPending ? 'Deleting…' : 'Delete'}
+    </button>
   )
 }
