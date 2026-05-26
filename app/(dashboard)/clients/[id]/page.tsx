@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { deleteContact } from '@/app/actions/clients'
+import { DeleteContactButton } from './contacts/DeleteContactButton'
 
 const statusColours: Record<string, string> = {
   lead: 'bg-blue-100 text-blue-700',
@@ -127,40 +127,27 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </div>
             {contacts && contacts.length > 0 ? (
               <div className="divide-y divide-gray-50">
-                {contacts.map((c: any) => {
-                  const deleteAction = deleteContact.bind(null, c.id, id)
-                  return (
-                    <div key={c.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">{c.first_name} {c.last_name}</span>
-                          {c.is_primary && <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Primary</span>}
-                        </div>
-                        {c.job_title && <div className="text-xs text-gray-500 mt-0.5">{c.job_title}</div>}
-                        <div className="text-xs text-gray-500 mt-0.5">{c.email}{c.phone ? ` · ${c.phone}` : ''}</div>
+                {contacts.map((c: any) => (
+                  <div key={c.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">{c.first_name} {c.last_name}</span>
+                        {c.is_primary && <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">Primary</span>}
                       </div>
-                      <div className="flex items-center gap-3 ml-4 shrink-0">
-                        <Link
-                          href={`/clients/${id}/contacts/${c.id}/edit`}
-                          className="text-xs text-gray-400 hover:text-gray-700 transition"
-                        >
-                          Edit
-                        </Link>
-                        <form action={deleteAction}>
-                          <button
-                            type="submit"
-                            className="text-xs text-red-400 hover:text-red-600 transition"
-                            onClick={(e) => {
-                              if (!confirm('Delete this contact?')) e.preventDefault()
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </form>
-                      </div>
+                      {c.job_title && <div className="text-xs text-gray-500 mt-0.5">{c.job_title}</div>}
+                      <div className="text-xs text-gray-500 mt-0.5">{c.email}{c.phone ? ` · ${c.phone}` : ''}</div>
                     </div>
-                  )
-                })}
+                    <div className="flex items-center gap-3 ml-4 shrink-0">
+                      <Link
+                        href={`/clients/${id}/contacts/${c.id}/edit`}
+                        className="text-xs text-gray-400 hover:text-gray-700 transition"
+                      >
+                        Edit
+                      </Link>
+                      <DeleteContactButton contactId={c.id} companyId={id} />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-sm text-gray-400 py-2">No contacts yet — <Link href={`/clients/${id}/contacts/new`} className="text-[#E8611A] hover:underline">add one</Link></p>
