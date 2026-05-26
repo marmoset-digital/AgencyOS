@@ -9,26 +9,7 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
   const { data: company } = await supabase.from('companies').select('*').eq('id', id).single()
   if (!company) notFound()
 
-  const action = async (formData: FormData) => {
-    'use server'
-    const { createClient } = await import('@/lib/supabase/server')
-    const { redirect } = await import('next/navigation')
-    const supabase = await createClient()
-    const payload = {
-      name: formData.get('name') as string,
-      industry: (formData.get('industry') as string) || null,
-      website: (formData.get('website') as string) || null,
-      billing_address: (formData.get('billing_address') as string) || null,
-      abn_acn: (formData.get('abn_acn') as string) || null,
-      status: formData.get('status') as string,
-      lead_source: (formData.get('lead_source') as string) || null,
-      lead_stage: (formData.get('lead_stage') as string) || null,
-      estimated_value: formData.get('estimated_value') ? parseFloat(formData.get('estimated_value') as string) : null,
-      notes: (formData.get('notes') as string) || null,
-    }
-    await supabase.from('companies').update(payload).eq('id', id)
-    redirect(`/clients/${id}`)
-  }
+  const action = updateCompany.bind(null, id)
 
   return (
     <div className="p-8 max-w-2xl">
@@ -37,7 +18,7 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
         <h1 className="text-2xl font-bold text-gray-900">Edit Client</h1>
       </div>
 
-      <form action={action} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <form action={action as any} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div className="grid grid-cols-2 gap-5">
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Company Name *</label>
@@ -93,8 +74,30 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
             <input name="estimated_value" type="number" step="0.01" defaultValue={company.estimated_value ?? ''} className="input" />
           </div>
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Billing Address</label>
-            <input name="billing_address" defaultValue={company.billing_address ?? ''} className="input" />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Street Address</label>
+            <input name="address" defaultValue={company.address ?? ''} className="input" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Suburb</label>
+            <input name="suburb" defaultValue={company.suburb ?? ''} className="input" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">State</label>
+            <select name="state" defaultValue={company.state ?? ''} className="input">
+              <option value="">— Select —</option>
+              <option value="VIC">VIC</option>
+              <option value="NSW">NSW</option>
+              <option value="QLD">QLD</option>
+              <option value="WA">WA</option>
+              <option value="SA">SA</option>
+              <option value="TAS">TAS</option>
+              <option value="ACT">ACT</option>
+              <option value="NT">NT</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Postcode</label>
+            <input name="postcode" defaultValue={company.postcode ?? ''} className="input" maxLength={4} />
           </div>
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes</label>
