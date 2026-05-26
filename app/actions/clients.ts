@@ -65,7 +65,7 @@ export async function updateCompany(id: string, formData: FormData) {
 // CSV Import
 // ──────────────────────────────────────────
 
-const VALID_STATUSES = ['lead', 'active', 'inactive', 'churned'] as const
+const VALID_STATUSES = ['lead', 'active_client', 'inactive', 'churned'] as const
 const VALID_LEAD_SOURCES = ['website', 'referral', 'linkedin', 'google_ads', 'meta_ads', 'cold_outreach', 'other'] as const
 const VALID_LEAD_STAGES = ['new_enquiry', 'proposal_sent', 'negotiation', 'won', 'lost'] as const
 
@@ -172,7 +172,8 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
     }
 
     const rawStatus = row['status']?.toLowerCase().trim()
-    const status = VALID_STATUSES.includes(rawStatus as any) ? rawStatus : 'lead'
+    const normStatus = rawStatus === 'active' ? 'active_client' : rawStatus
+    const status = VALID_STATUSES.includes(normStatus as any) ? normStatus : 'lead'
     const rawLeadSource = row['lead_source']?.toLowerCase().trim().replace(/\s+/g, '_')
     const lead_source = VALID_LEAD_SOURCES.includes(rawLeadSource as any) ? rawLeadSource : null
     const rawLeadStage = row['lead_stage']?.toLowerCase().trim().replace(/\s+/g, '_')
