@@ -36,6 +36,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', voided: 'bg-gray-100 text-gray-400',
   }
 
+  const addressLine = [company.suburb, company.state, company.postcode].filter(Boolean).join(' ')
+
   return (
     <div className="p-8">
       {/* Header */}
@@ -77,10 +79,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                   <dd className="text-gray-900">{company.abn_acn}</dd>
                 </div>
               )}
-              {company.billing_address && (
+              {(company.address || company.suburb || company.state || company.postcode) && (
                 <div>
-                  <dt className="text-gray-500 text-xs mb-0.5">Billing Address</dt>
-                  <dd className="text-gray-900">{company.billing_address}</dd>
+                  <dt className="text-gray-500 text-xs mb-0.5">Address</dt>
+                  <dd className="text-gray-900">
+                    {company.address && <div>{company.address}</div>}
+                    {addressLine && <div>{addressLine}</div>}
+                  </dd>
                 </div>
               )}
               {company.lead_source && (
@@ -138,12 +143,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       <div className="text-xs text-gray-500 mt-0.5">{c.email}{c.phone ? ` · ${c.phone}` : ''}</div>
                     </div>
                     <div className="flex items-center gap-3 ml-4 shrink-0">
-                      <Link
-                        href={`/clients/${id}/contacts/${c.id}/edit`}
-                        className="text-xs text-gray-400 hover:text-gray-700 transition"
-                      >
-                        Edit
-                      </Link>
+                      <Link href={`/clients/${id}/contacts/${c.id}/edit`} className="text-xs text-gray-400 hover:text-gray-700 transition">Edit</Link>
                       <DeleteContactButton contactId={c.id} companyId={id} />
                     </div>
                   </div>
