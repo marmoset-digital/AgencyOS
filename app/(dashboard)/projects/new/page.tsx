@@ -10,7 +10,7 @@ export default async function NewProjectPage() {
   const { data: companies } = await supabase
     .from('companies')
     .select('id, name, status')
-    .in('status', ['active', 'lead'])
+    .in('status', ['active_client', 'lead'])
     .order('name', { ascending: true })
 
   // Fetch team members for assignment
