@@ -204,7 +204,7 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
   // ── 2. Bulk insert all companies ────────────────────────────────
   const { data: insertedCompanies, error: bulkError } = await supabase
     .from('companies')
-    .insert(companyPayloads)
+    .insert(companyPayloads as any)
     .select('id, name')
 
   if (bulkError) {
@@ -262,7 +262,7 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
   if (contactPayloads.length > 0) {
     const { data: insertedContacts, error: contactBulkError } = await supabase
       .from('contacts')
-      .insert(contactPayloads)
+      .insert(contactPayloads as any)
       .select('id')
 
     if (contactBulkError) {
