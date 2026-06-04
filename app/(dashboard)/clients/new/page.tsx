@@ -11,6 +11,7 @@ export default function NewClientPage() {
 
       <form action={createCompany as any} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div className="grid grid-cols-2 gap-5">
+
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Company Name *</label>
             <input name="name" required className="input" placeholder="Acme Corp" />
@@ -35,7 +36,7 @@ export default function NewClientPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
             <select name="status" className="input">
               <option value="lead">Lead</option>
-              <option value="active">Active</option>
+              <option value="active_client">Active Client</option>
               <option value="inactive">Inactive</option>
               <option value="churned">Churned</option>
             </select>
@@ -69,7 +70,7 @@ export default function NewClientPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Estimated Value ($)</label>
-            <input name="estimated_value" type="number" step="0.01" className="input" placeholder="0.00" />
+            <input name="estimated_value" type="number" min="0" step="0.01" className="input" placeholder="0.00" />
           </div>
 
           <div className="col-span-2">
@@ -104,15 +105,13 @@ export default function NewClientPage() {
 
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes</label>
-            <textarea name="notes" rows={4} className="input resize-none" placeholder="Internal notes about this client…" />
+            <textarea name="notes" rows={3} className="input" placeholder="Internal notes about this client..." />
           </div>
+
         </div>
 
         <div className="flex items-center gap-3 pt-2">
-          <button
-            type="submit"
-            className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition"
-          >
+          <button type="submit" className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
             Save Client
           </button>
           <Link href="/clients" className="text-sm text-gray-500 hover:text-gray-700">Cancel</Link>
