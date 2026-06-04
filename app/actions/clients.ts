@@ -142,9 +142,6 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { imported: 0, contactsImported: 0, skipped: 0, errors: [{ row: 0, message: 'Not authenticated' }] }
 
-  const { data: profile } = await supabase.from('users').select('id').eq('id', user.id).single()
-  const userId = profile?.id ?? null
-
   const csvText = formData.get('csv') as string
   if (!csvText?.trim()) {
     return { imported: 0, contactsImported: 0, skipped: 0, errors: [{ row: 0, message: 'No CSV data received' }] }
@@ -155,11 +152,11 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
     return { imported: 0, contactsImported: 0, skipped: 0, errors: [{ row: 0, message: 'CSV is empty or could not be parsed' }] }
   }
 
-  let imported = 0
-  let contactsImported = 0
-  let skipped = 0
   const errors: { row: number; message: string }[] = []
+  const companyPayloads: Record<string, unknown>[] = []
+  const rowIndexMap: number[] = [] // maps companyPayloads index → original row number
 
+  // ── 1. Validate and build company payloads ──────────────────────
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const rowNum = i + 2
@@ -167,21 +164,23 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
     const name = row['name']?.trim()
     if (!name) {
       errors.push({ row: rowNum, message: 'Company name is required' })
-      skipped++
       continue
     }
 
     const rawStatus = row['status']?.toLowerCase().trim()
     const normStatus = rawStatus === 'active' ? 'active_client' : rawStatus
     const status = VALID_STATUSES.includes(normStatus as any) ? normStatus : 'lead'
+
     const rawLeadSource = row['lead_source']?.toLowerCase().trim().replace(/\s+/g, '_')
     const lead_source = VALID_LEAD_SOURCES.includes(rawLeadSource as any) ? rawLeadSource : null
+
     const rawLeadStage = row['lead_stage']?.toLowerCase().trim().replace(/\s+/g, '_')
     const lead_stage = VALID_LEAD_STAGES.includes(rawLeadStage as any) ? rawLeadStage : null
+
     const rawValue = row['estimated_value']?.replace(/[$,\s]/g, '')
     const estimated_value = rawValue && !isNaN(parseFloat(rawValue)) ? parseFloat(rawValue) : null
 
-    const companyPayload = {
+    companyPayloads.push({
       name,
       industry: row['industry'] || null,
       website: row['website'] || null,
@@ -189,28 +188,43 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
       suburb: row['suburb'] || null,
       state: row['state'] || null,
       postcode: row['postcode'] || null,
-      abn_acn: row['abn_acn'] || null,
       status,
       lead_source,
       lead_stage,
-      estimated_value,
+      lead_estimated_value: estimated_value,
       notes: row['notes'] || null,
-      created_by: userId,
-    }
+    })
+    rowIndexMap.push(rowNum)
+  }
 
-    const { data: company, error: companyError } = await supabase
-      .from('companies')
-      .insert(companyPayload)
-      .select('id')
-      .single()
+  if (companyPayloads.length === 0) {
+    return { imported: 0, contactsImported: 0, skipped: errors.length, errors }
+  }
 
-    if (companyError) {
-      errors.push({ row: rowNum, message: `${name}: ${companyError.message}` })
-      skipped++
-      continue
-    }
+  // ── 2. Bulk insert all companies ────────────────────────────────
+  const { data: insertedCompanies, error: bulkError } = await supabase
+    .from('companies')
+    .insert(companyPayloads)
+    .select('id, name')
 
-    imported++
+  if (bulkError) {
+    errors.push({ row: 0, message: `Bulk insert failed: ${bulkError.message}` })
+    return { imported: 0, contactsImported: 0, skipped: companyPayloads.length, errors }
+  }
+
+  const imported = insertedCompanies?.length ?? 0
+
+  // ── 3. Build contact payloads ───────────────────────────────────
+  const contactPayloads: Record<string, unknown>[] = []
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const rowNum = i + 2
+    const name = row['name']?.trim()
+    if (!name) continue
+
+    const company = insertedCompanies?.find(c => c.name === name)
+    if (!company) continue
 
     const contactEmail = row['contact_email']?.trim()
     const contactFirstName = row['contact_first_name']?.trim()
@@ -218,89 +232,45 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
 
     if (contactEmail || contactFirstName || contactLastName) {
       if (!contactFirstName || !contactLastName || !contactEmail) {
-        errors.push({ row: rowNum, message: `${name}: Contact skipped — first name, last name, and email are all required for contact import` })
+        errors.push({
+          row: rowNum,
+          message: `${name}: Contact skipped — first name, last name, and email are all required`,
+        })
       } else {
-        const contactPayload = {
+        contactPayloads.push({
           company_id: company.id,
           first_name: contactFirstName,
           last_name: contactLastName,
           email: contactEmail,
           phone: row['contact_phone'] || null,
           job_title: row['contact_job_title'] || null,
-          is_primary: true,
           portal_access: false,
-          notification_preferences: { project_updates: true, invoice_notifications: true, approval_requests: true, ticket_updates: true },
-        }
-        const { error: contactError } = await supabase.from('contacts').insert(contactPayload)
-        if (contactError) {
-          errors.push({ row: rowNum, message: `${name}: Contact error — ${contactError.message}` })
-        } else {
-          contactsImported++
-        }
+          notification_preferences: {
+            project_status_change: true,
+            invoice_sent: true,
+            approval_request: true,
+            ticket_update: true,
+            subscription_renewal: true,
+          },
+        })
       }
     }
   }
 
-  return { imported, contactsImported, skipped, errors }
-}
+  // ── 4. Bulk insert all contacts ─────────────────────────────────
+  let contactsImported = 0
+  if (contactPayloads.length > 0) {
+    const { data: insertedContacts, error: contactBulkError } = await supabase
+      .from('contacts')
+      .insert(contactPayloads)
+      .select('id')
 
-// ──────────────────────────────────────────
-// Contacts
-// ──────────────────────────────────────────
-
-export async function createContact(companyId: string, formData: FormData) {
-  const supabase = await createClient()
-
-  const payload = {
-    company_id: companyId,
-    first_name: formData.get('first_name') as string,
-    last_name: formData.get('last_name') as string,
-    email: formData.get('email') as string,
-    phone: (formData.get('phone') as string) || null,
-    job_title: (formData.get('job_title') as string) || null,
-    is_primary: formData.get('is_primary') === 'on',
-    portal_access: false,
-    notification_preferences: {
-      project_updates: true,
-      invoice_notifications: true,
-      approval_requests: true,
-      ticket_updates: true,
-    },
+    if (contactBulkError) {
+      errors.push({ row: 0, message: `Contact bulk insert failed: ${contactBulkError.message}` })
+    } else {
+      contactsImported = insertedContacts?.length ?? 0
+    }
   }
 
-  if (!payload.first_name || !payload.last_name || !payload.email) {
-    return { error: 'First name, last name, and email are required' }
-  }
-
-  const { error } = await supabase.from('contacts').insert(payload)
-  if (error) return { error: error.message }
-
-  revalidatePath(`/clients/${companyId}`)
-  redirect(`/clients/${companyId}`)
-}
-
-export async function updateContact(contactId: string, companyId: string, formData: FormData) {
-  const supabase = await createClient()
-
-  const payload = {
-    first_name: formData.get('first_name') as string,
-    last_name: formData.get('last_name') as string,
-    email: formData.get('email') as string,
-    phone: (formData.get('phone') as string) || null,
-    job_title: (formData.get('job_title') as string) || null,
-    is_primary: formData.get('is_primary') === 'on',
-  }
-
-  const { error } = await supabase.from('contacts').update(payload).eq('id', contactId)
-  if (error) return { error: error.message }
-
-  revalidatePath(`/clients/${companyId}`)
-  redirect(`/clients/${companyId}`)
-}
-
-export async function deleteContact(contactId: string, companyId: string) {
-  const supabase = await createClient()
-  const { error } = await supabase.from('contacts').delete().eq('id', contactId)
-  if (error) return { error: error.message }
-  revalidatePath(`/clients/${companyId}`)
+  return { imported, contactsImported, skipped: errors.filter(e => e.row > 0 && !e.message.includes('Contact skipped')).length, errors }
 }
