@@ -61,9 +61,9 @@ export async function updateCompany(id: string, formData: FormData) {
   redirect(`/clients/${id}`)
 }
 
-// ──────────────────────────────────────────
+// ââââââââââââââââââââââââââââââââââââââââââ
 // CSV Import
-// ──────────────────────────────────────────
+// ââââââââââââââââââââââââââââââââââââââââââ
 
 const VALID_STATUSES = ['lead', 'active_client', 'inactive', 'churned'] as const
 const VALID_LEAD_SOURCES = ['website', 'referral', 'linkedin', 'google_ads', 'meta_ads', 'cold_outreach', 'other'] as const
@@ -154,9 +154,9 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
 
   const errors: { row: number; message: string }[] = []
   const companyPayloads: Record<string, unknown>[] = []
-  const rowIndexMap: number[] = [] // maps companyPayloads index → original row number
+  const rowIndexMap: number[] = [] // maps companyPayloads index â original row number
 
-  // ── 1. Validate and build company payloads ──────────────────────
+  // ââ 1. Validate and build company payloads ââââââââââââââââââââââ
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const rowNum = i + 2
@@ -201,7 +201,7 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
     return { imported: 0, contactsImported: 0, skipped: errors.length, errors }
   }
 
-  // ── 2. Bulk insert all companies ────────────────────────────────
+  // ââ 2. Bulk insert all companies ââââââââââââââââââââââââââââââââ
   const { data: insertedCompanies, error: bulkError } = await supabase
     .from('companies')
     .insert(companyPayloads)
@@ -214,7 +214,7 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
 
   const imported = insertedCompanies?.length ?? 0
 
-  // ── 3. Build contact payloads ───────────────────────────────────
+  // ââ 3. Build contact payloads âââââââââââââââââââââââââââââââââââ
   const contactPayloads: Record<string, unknown>[] = []
 
   for (let i = 0; i < rows.length; i++) {
@@ -234,7 +234,7 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
       if (!contactFirstName || !contactLastName || !contactEmail) {
         errors.push({
           row: rowNum,
-          message: `${name}: Contact skipped — first name, last name, and email are all required`,
+          message: `${name}: Contact skipped â first name, last name, and email are all required`,
         })
       } else {
         contactPayloads.push({
@@ -257,7 +257,7 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
     }
   }
 
-  // ── 4. Bulk insert all contacts ─────────────────────────────────
+  // ââ 4. Bulk insert all contacts âââââââââââââââââââââââââââââââââ
   let contactsImported = 0
   if (contactPayloads.length > 0) {
     const { data: insertedContacts, error: contactBulkError } = await supabase
@@ -275,9 +275,9 @@ export async function importCompaniesFromCSV(formData: FormData): Promise<Import
   return { imported, contactsImported, skipped: errors.filter(e => e.row > 0 && !e.message.includes('Contact skipped')).length, errors }
 }
 
-// ──────────────────────────────────────────
+// ââââââââââââââââââââââââââââââââââââââââââ
 // Contact Actions
-// ──────────────────────────────────────────
+// ââââââââââââââââââââââââââââââââââââââââââ
 
 export async function createContact(companyId: string, formData: FormData) {
   const supabase = await createClient()
