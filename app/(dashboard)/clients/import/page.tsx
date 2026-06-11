@@ -4,9 +4,9 @@ import { useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { importCompaniesFromCSV, type ImportResult } from '@/app/actions/clients'
 
-// ── Sample CSV template ─────────────────────────────────────────
+// ââ Sample CSV template âââââââââââââââââââââââââââââââââââââââââ
 const SAMPLE_CSV = `name,industry,website,billing_address,abn_acn,status,lead_source,lead_stage,estimated_value,notes,first_name,last_name,email,phone,job_title
-Acme Corp,Hospitality,https://acme.com.au,"123 Example St, Melbourne VIC 3000",12 345 678 901,active,referral,,5000,Long-standing client,Jane,Smith,jane@acme.com.au,0412 345 678,Marketing Manager
+Acme Corp,Hospitality,https://acme.com.au,"123 Example St, Melbourne VIC 3000",12 345 678 901,active_client,referral,,5000,Long-standing client,Jane,Smith,jane@acme.com.au,0412 345 678,Marketing Manager
 Blue Sky Media,Media & Entertainment,https://bluesky.com.au,,98 765 432 109,lead,website,proposal_sent,12000,,Tom,Jones,tom@bluesky.com.au,0499 999 888,Director
 `
 
@@ -20,7 +20,7 @@ function downloadSample() {
   URL.revokeObjectURL(url)
 }
 
-// ── Simple client-side CSV preview parser ───────────────────────
+// ââ Simple client-side CSV preview parser âââââââââââââââââââââââ
 function parsePreview(text: string, maxRows = 5): { headers: string[]; rows: string[][] } {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
   if (lines.length < 2) return { headers: [], rows: [] }
@@ -92,12 +92,12 @@ export default function ImportClientsPage() {
     setStep('done')
   }
 
-  // ── Upload step ────────────────────────────────────────────────
+  // ââ Upload step ââââââââââââââââââââââââââââââââââââââââââââââââ
   if (step === 'upload') {
     return (
       <div className="p-8 max-w-2xl">
         <div className="mb-8">
-          <Link href="/clients" className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">← Back to Clients</Link>
+          <Link href="/clients" className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">â Back to Clients</Link>
           <h1 className="text-2xl font-bold text-gray-900">Import Clients from CSV</h1>
           <p className="text-gray-500 mt-1">Bulk import companies and their primary contacts from a CSV file.</p>
         </div>
@@ -111,7 +111,7 @@ export default function ImportClientsPage() {
             dragOver ? 'border-[#E8611A] bg-orange-50' : 'border-gray-200 hover:border-[#E8611A] hover:bg-orange-50/50'
           }`}
         >
-          <div className="text-4xl mb-3">📄</div>
+          <div className="text-4xl mb-3">ð</div>
           <p className="font-semibold text-gray-700 mb-1">Drop your CSV file here</p>
           <p className="text-sm text-gray-400">or click to browse</p>
           <input
@@ -130,7 +130,7 @@ export default function ImportClientsPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-800">Supported Columns</h2>
             <button onClick={downloadSample} className="text-sm text-[#E8611A] hover:underline font-medium">
-              ↓ Download template
+              â Download template
             </button>
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -142,7 +142,7 @@ export default function ImportClientsPage() {
                 <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">website</span></li>
                 <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">billing_address</span></li>
                 <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">abn_acn</span></li>
-                <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">status</span> <span className="text-gray-400 text-xs">lead / active / inactive / churned</span></li>
+                <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">status</span> <span className="text-gray-400 text-xs">lead / active_client / inactive / churned</span></li>
                 <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">lead_source</span></li>
                 <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">lead_stage</span></li>
                 <li><span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">estimated_value</span></li>
@@ -166,15 +166,15 @@ export default function ImportClientsPage() {
     )
   }
 
-  // ── Preview step ───────────────────────────────────────────────
+  // ââ Preview step âââââââââââââââââââââââââââââââââââââââââââââââ
   if (step === 'preview') {
     return (
       <div className="p-8 max-w-5xl">
         <div className="mb-6">
-          <Link href="/clients" className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">← Back to Clients</Link>
+          <Link href="/clients" className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">â Back to Clients</Link>
           <h1 className="text-2xl font-bold text-gray-900">Preview Import</h1>
           <p className="text-gray-500 mt-1">
-            <span className="font-medium text-gray-700">{fileName}</span> — {totalRows} row{totalRows !== 1 ? 's' : ''} detected
+            <span className="font-medium text-gray-700">{fileName}</span> â {totalRows} row{totalRows !== 1 ? 's' : ''} detected
           </p>
         </div>
 
@@ -201,7 +201,7 @@ export default function ImportClientsPage() {
                     <tr key={i} className="border-b border-gray-50 last:border-0">
                       {row.map((cell, j) => (
                         <td key={j} className="px-4 py-3 text-gray-700 whitespace-nowrap max-w-[200px] overflow-hidden text-ellipsis">
-                          {cell || <span className="text-gray-300">—</span>}
+                          {cell || <span className="text-gray-300">â</span>}
                         </td>
                       ))}
                     </tr>
@@ -231,24 +231,24 @@ export default function ImportClientsPage() {
     )
   }
 
-  // ── Importing step ─────────────────────────────────────────────
+  // ââ Importing step âââââââââââââââââââââââââââââââââââââââââââââ
   if (step === 'importing') {
     return (
       <div className="p-8 max-w-2xl">
         <div className="flex items-center gap-4 py-16 text-gray-500">
           <div className="w-6 h-6 border-2 border-[#E8611A] border-t-transparent rounded-full animate-spin" />
-          <span className="text-lg font-medium">Importing {totalRows} clients…</span>
+          <span className="text-lg font-medium">Importing {totalRows} clientsâ¦</span>
         </div>
       </div>
     )
   }
 
-  // ── Done step ──────────────────────────────────────────────────
+  // ââ Done step ââââââââââââââââââââââââââââââââââââââââââââââââââ
   if (step === 'done' && result) {
     return (
       <div className="p-8 max-w-2xl">
         <div className="mb-8">
-          <Link href="/clients" className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">← Back to Clients</Link>
+          <Link href="/clients" className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">â Back to Clients</Link>
           <h1 className="text-2xl font-bold text-gray-900">Import Complete</h1>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-8">
@@ -282,7 +282,7 @@ export default function ImportClientsPage() {
         )}
         <div className="flex items-center gap-3">
           <Link href="/clients" className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
-            View Clients →
+            View Clients â
           </Link>
           <button
             onClick={() => { setCsvText(''); setFileName(''); setPreview({ headers: [], rows: [] }); setResult(null); setStep('upload') }}
