@@ -19,6 +19,13 @@ const stageLabels: Record<string, string> = Object.fromEntries(
   PROJECT_STAGES.map(s => [s.value, s.label])
 )
 
+function formatMinutes(m: number) {
+  if (!m) return '0m'
+  const h = Math.floor(m / 60)
+  const mm = m % 60
+  return h ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`
+}
+
 export default async function ProjectDetailPage({
   params,
 }: {
@@ -26,6 +33,8 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
 
   // Fetch project with related data
   const { data: project } = await supabase
@@ -55,6 +64,31 @@ export default async function ProjectDetailPage({
     .from('users')
     .select('id, full_name, role')
     .order('full_name', { ascending: true })
+
+  // Fetch time logs for this project
+  const { data: timeLogs } = await supabase
+    .from('time_logs')
+    .select('id, task_id, duration_minutes, is_billable')
+    .eq('project_id', id)
+
+  // Fetch the current user's running timer (if any)
+  const { data: activeTimer } = await supabase
+    .from('active_timers')
+    .select('*')
+    .eq('user_id', user?.id ?? '00000000-0000-0000-0000-000000000000')
+    .maybeSingle()
+
+  // Aggregate time
+  const minutesByTask: Record<string, number> = {}
+  let totalMinutes = 0
+  let billableMinutes = 0
+  for (const log of timeLogs ?? []) {
+    if (log.task_id) {
+      minutesByTask[log.task_id] = (minutesByTask[log.task_id] ?? 0) + log.duration_minutes
+    }
+    totalMinutes += log.duration_minutes
+    if (log.is_billable) billableMinutes += log.duration_minutes
+  }
 
   // Stats
   const totalTasks = tasks?.length ?? 0
@@ -113,7 +147,7 @@ export default async function ProjectDetailPage({
       </div>
 
       {/* Meta cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-xs text-gray-400 mb-1">Client</div>
           <div className="font-medium text-gray-900 text-sm">
@@ -158,6 +192,12 @@ export default async function ProjectDetailPage({
           </div>
           <div className="text-xs text-gray-400 mt-1">{doneTasks} of {totalTasks} tasks done</div>
         </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="text-xs text-gray-400 mb-1">Time Logged</div>
+          <div className="font-semibold text-gray-900 text-sm">{formatMinutes(totalMinutes)}</div>
+          <div className="text-xs text-gray-400 mt-1">{formatMinutes(billableMinutes)} billable</div>
+        </div>
       </div>
 
       {/* Retainer caps */}
@@ -181,6 +221,8 @@ export default async function ProjectDetailPage({
           projectId={id}
           companyId={project.company_id}
           users={(users ?? []) as any}
+          minutesByTask={minutesByTask}
+          activeTimer={(activeTimer ?? null) as any}
         />
       </div>
     </div>

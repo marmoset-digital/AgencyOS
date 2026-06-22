@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { createTask, updateTaskStatus, deleteTask } from '@/app/actions/projects'
+import { startTimer, stopTimer, logTime } from '@/app/actions/time'
 import type { Task, User } from '@/types'
+import type { ActiveTimer } from '@/types/time'
 
 const PRIORITY_COLOURS: Record<string, string> = {
   high:   'bg-red-100 text-red-700',
@@ -23,6 +25,24 @@ interface Props {
   projectId: string
   companyId: string
   users: User[]
+  minutesByTask: Record<string, number>
+  activeTimer: ActiveTimer | null
+}
+
+function fmtMins(m?: number) {
+  if (!m) return '0m'
+  const h = Math.floor(m / 60)
+  const mm = m % 60
+  return h ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`
+}
+
+function liveElapsed(startedAt: string) {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`
 }
 
 function formatDue(date?: string) {
@@ -36,10 +56,57 @@ function formatDue(date?: string) {
   return <span className="text-gray-400 text-xs">{label}</span>
 }
 
-export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users }: Props) {
+// Per-task start/stop timer with live elapsed display.
+function TaskTimer({
+  taskId,
+  projectId,
+  isRunning,
+  startedAt,
+}: {
+  taskId: string
+  projectId: string
+  isRunning: boolean
+  startedAt?: string
+}) {
+  const [isPending, start] = useTransition()
+  const [, force] = useState(0)
+
+  useEffect(() => {
+    if (!isRunning) return
+    const i = setInterval(() => force(n => n + 1), 1000)
+    return () => clearInterval(i)
+  }, [isRunning])
+
+  if (isRunning && startedAt) {
+    return (
+      <button
+        onClick={() => start(async () => { await stopTimer(projectId) })}
+        disabled={isPending}
+        title="Stop timer"
+        className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+      >
+        ⏹ {liveElapsed(startedAt)}
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => start(async () => { await startTimer(taskId, projectId) })}
+      disabled={isPending}
+      title="Start timer"
+      className="inline-flex items-center gap-1 text-xs font-medium text-[#E8611A] hover:text-[#d45516] disabled:opacity-50"
+    >
+      ▶ Start
+    </button>
+  )
+}
+
+export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer }: Props) {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showLogForm, setShowLogForm] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   function handleStatusChange(taskId: string, newStatus: TaskStatus) {
@@ -89,6 +156,12 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
             {tasks.filter(t => t.status === 'done').length} / {tasks.length} done
           </span>
           <button
+            onClick={() => setShowLogForm(v => !v)}
+            className="border border-gray-200 hover:border-gray-300 text-gray-600 hover:text-gray-900 text-xs font-semibold px-3 py-2 rounded-lg transition"
+          >
+            ⏱ Log time
+          </button>
+          <button
             onClick={() => setShowAddForm(v => !v)}
             className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
           >
@@ -96,6 +169,51 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
           </button>
         </div>
       </div>
+
+      {showLogForm && (
+        <form
+          action={async (fd) => {
+            fd.append('project_id', projectId)
+            await logTime(fd)
+            setShowLogForm(false)
+          }}
+          className="bg-white border border-gray-200 rounded-xl p-4 mb-4"
+        >
+          <div className="text-xs font-semibold text-gray-500 mb-3">Log time manually</div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="col-span-2">
+              <select name="task_id" className="input text-sm">
+                <option value="">Project (no specific task)</option>
+                {tasks.map(t => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <input name="hours" type="number" min="0" step="1" className="input text-sm" placeholder="Hours" />
+            </div>
+            <div>
+              <input name="minutes" type="number" min="0" max="59" step="1" className="input text-sm" placeholder="Minutes" />
+            </div>
+            <div>
+              <input name="logged_at" type="date" className="input text-sm" />
+            </div>
+            <div className="flex items-center gap-2">
+              <input id="is_billable" name="is_billable" type="checkbox" defaultChecked className="w-4 h-4 rounded accent-[#E8611A]" />
+              <label htmlFor="is_billable" className="text-sm text-gray-600">Billable</label>
+            </div>
+            <div className="col-span-2">
+              <input name="description" className="input text-sm" placeholder="Note (optional)" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="submit" disabled={isPending} className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
+              Save time
+            </button>
+            <button type="button" onClick={() => setShowLogForm(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+          </div>
+        </form>
+      )}
 
       {showAddForm && (
         <form
@@ -158,6 +276,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Priority</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Assignee</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Due</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">Time</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -182,6 +301,17 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                     </td>
                     <td className="px-4 py-3.5 text-gray-600 text-xs">{(task as any).assignee?.full_name ?? '—'}</td>
                     <td className="px-4 py-3.5">{formatDue(task.due_date)}</td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs text-gray-600">{fmtMins(minutesByTask[task.id] ?? 0)}</span>
+                        <TaskTimer
+                          taskId={task.id}
+                          projectId={projectId}
+                          isRunning={activeTimer?.task_id === task.id}
+                          startedAt={activeTimer?.started_at}
+                        />
+                      </div>
+                    </td>
                     <td className="px-4 py-3.5">
                       <select
                         value={task.status}
@@ -229,7 +359,18 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                       {task.due_date && formatDue(task.due_date)}
                       {(task as any).assignee && <span className="text-xs text-gray-400 ml-auto">{(task as any).assignee.full_name.split(' ')[0]}</span>}
                     </div>
-                    <div className="flex gap-1 mt-3 pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-100">
+                      <span className="text-xs text-gray-400">⏱ {fmtMins(minutesByTask[task.id] ?? 0)}</span>
+                      <span className="ml-auto">
+                        <TaskTimer
+                          taskId={task.id}
+                          projectId={projectId}
+                          isRunning={activeTimer?.task_id === task.id}
+                          startedAt={activeTimer?.started_at}
+                        />
+                      </span>
+                    </div>
+                    <div className="flex gap-1 mt-2">
                       {col.key !== 'todo' && (
                         <button onClick={() => handleStatusChange(task.id, col.key === 'done' ? 'in_progress' : 'todo')} className="text-xs text-gray-400 hover:text-gray-700 transition">← Back</button>
                       )}
