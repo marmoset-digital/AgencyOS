@@ -109,6 +109,10 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
   const [showLogForm, setShowLogForm] = useState(false)
   const [isPending, startTransition] = useTransition()
 
+  // Keep the local task list in sync when the server sends fresh data
+  // (e.g. after adding a task, which revalidates the page).
+  useEffect(() => { setTasks(initialTasks) }, [initialTasks])
+
   function handleStatusChange(taskId: string, newStatus: TaskStatus) {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
     startTransition(async () => {
