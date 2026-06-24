@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import TaskBoard from './TaskBoard'
 import { PROJECT_STAGES } from '@/types'
+import type { Subtask } from '@/types/subtask'
 
 const stageColours: Record<string, string> = {
   quote_sent:          'bg-purple-100 text-purple-700',
@@ -64,6 +65,21 @@ export default async function ProjectDetailPage({
     .from('users')
     .select('id, full_name, role')
     .order('full_name', { ascending: true })
+
+  // Fetch subtasks for this project's tasks
+  const taskIds = (tasks ?? []).map(t => t.id)
+  const subtasksByTask: Record<string, Subtask[]> = {}
+  if (taskIds.length > 0) {
+    const { data: subtasks } = await supabase
+      .from('subtasks')
+      .select('*')
+      .in('task_id', taskIds)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+    for (const s of (subtasks ?? []) as Subtask[]) {
+      (subtasksByTask[s.task_id] ??= []).push(s)
+    }
+  }
 
   // Fetch time logs for this project
   const { data: timeLogs } = await supabase
@@ -223,6 +239,7 @@ export default async function ProjectDetailPage({
           users={(users ?? []) as any}
           minutesByTask={minutesByTask}
           activeTimer={(activeTimer ?? null) as any}
+          subtasksByTask={subtasksByTask as any}
         />
       </div>
     </div>

@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, Fragment } from 'react'
 import { createTask, updateTaskStatus, deleteTask } from '@/app/actions/projects'
 import { startTimer, stopTimer, logTime } from '@/app/actions/time'
+import { editTask, addSubtask, toggleSubtask, deleteSubtask } from '@/app/actions/tasks'
 import type { Task, User } from '@/types'
 import type { ActiveTimer } from '@/types/time'
+import type { Subtask } from '@/types/subtask'
 
 const PRIORITY_COLOURS: Record<string, string> = {
   high:   'bg-red-100 text-red-700',
@@ -27,6 +29,7 @@ interface Props {
   users: User[]
   minutesByTask: Record<string, number>
   activeTimer: ActiveTimer | null
+  subtasksByTask: Record<string, Subtask[]>
 }
 
 function fmtMins(m?: number) {
@@ -54,6 +57,12 @@ function formatDue(date?: string) {
   if (diff < 0) return <span className="text-red-600 text-xs font-medium">⚠ {label}</span>
   if (diff <= 3) return <span className="text-orange-600 text-xs font-medium">⏰ {label}</span>
   return <span className="text-gray-400 text-xs">{label}</span>
+}
+
+function subtaskProgress(subs?: Subtask[]) {
+  if (!subs || subs.length === 0) return null
+  const done = subs.filter(s => s.completed).length
+  return `${done}/${subs.length}`
 }
 
 // Per-task start/stop timer with live elapsed display.
@@ -102,11 +111,126 @@ function TaskTimer({
   )
 }
 
-export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer }: Props) {
+// Expanded panel: subtask checklist + inline edit form.
+function TaskDetailPanel({
+  task,
+  projectId,
+  users,
+  subtasks,
+}: {
+  task: Task
+  projectId: string
+  users: User[]
+  subtasks: Subtask[]
+}) {
+  const [isPending, startT] = useTransition()
+  const [editing, setEditing] = useState(false)
+
+  return (
+    <div className="bg-gray-50 border-t border-gray-100 px-6 py-4">
+      {/* Subtasks */}
+      <div className="mb-4">
+        <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Subtasks</div>
+        {subtasks.length === 0 && (
+          <div className="text-xs text-gray-400 mb-2">No subtasks yet.</div>
+        )}
+        <div className="flex flex-col gap-1.5 mb-2">
+          {subtasks.map(s => (
+            <div key={s.id} className="flex items-center gap-2 group/st">
+              <input
+                type="checkbox"
+                checked={s.completed}
+                onChange={() => startT(async () => { await toggleSubtask(s.id, !s.completed, projectId) })}
+                className="w-4 h-4 rounded accent-[#E8611A] cursor-pointer"
+              />
+              <span className={`text-sm ${s.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>{s.title}</span>
+              <button
+                onClick={() => startT(async () => { await deleteSubtask(s.id, projectId) })}
+                className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover/st:opacity-100 transition ml-1"
+                title="Delete subtask"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+        <form
+          action={async (fd) => { await addSubtask(task.id, projectId, (fd.get('title') as string) ?? '') }}
+          className="flex items-center gap-2 max-w-md"
+        >
+          <input name="title" required placeholder="Add a subtask…" className="input text-sm flex-1" />
+          <button type="submit" disabled={isPending} className="text-xs font-semibold text-[#E8611A] hover:text-[#d45516] disabled:opacity-50 whitespace-nowrap">+ Add</button>
+        </form>
+      </div>
+
+      {/* Edit task */}
+      {!editing ? (
+        <button
+          onClick={() => setEditing(true)}
+          className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition"
+        >
+          ✎ Edit task
+        </button>
+      ) : (
+        <form
+          action={async (fd) => { await editTask(task.id, projectId, fd); setEditing(false) }}
+          className="bg-white border border-gray-200 rounded-xl p-4"
+        >
+          <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">Edit task</div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="col-span-2">
+              <input name="title" required defaultValue={task.title} className="input" placeholder="Task title *" />
+            </div>
+            <div>
+              <select name="priority" defaultValue={task.priority} className="input text-sm">
+                <option value="low">Low priority</option>
+                <option value="medium">Medium priority</option>
+                <option value="high">High priority</option>
+              </select>
+            </div>
+            <div>
+              <select name="assignee_id" defaultValue={task.assignee_id ?? ''} className="input text-sm">
+                <option value="">Unassigned</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <select name="status" defaultValue={task.status} className="input text-sm">
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+            <div>
+              <input name="due_date" type="date" defaultValue={task.due_date ?? ''} className="input text-sm" />
+            </div>
+            <div>
+              <input name="time_estimate" type="number" min="0" step="15" defaultValue={task.time_estimate ?? ''} className="input text-sm" placeholder="Est. minutes" />
+            </div>
+            <div className="col-span-2">
+              <textarea name="description" rows={2} defaultValue={task.description ?? ''} className="input resize-none text-sm" placeholder="Description (optional)" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="submit" disabled={isPending} className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
+              Save changes
+            </button>
+            <button type="button" onClick={() => setEditing(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask }: Props) {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [showAddForm, setShowAddForm] = useState(false)
   const [showLogForm, setShowLogForm] = useState(false)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   // Keep the local task list in sync when the server sends fresh data
@@ -286,52 +410,80 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                 </tr>
               </thead>
               <tbody>
-                {tasks.map(task => (
-                  <tr key={task.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition group">
-                    <td className="px-5 py-3.5">
-                      <input
-                        type="checkbox"
-                        checked={task.status === 'done'}
-                        onChange={() => handleStatusChange(task.id, task.status === 'done' ? 'todo' : 'done')}
-                        className="w-4 h-4 rounded accent-[#E8611A] cursor-pointer"
-                      />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</div>
-                      {task.description && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</div>}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>
-                    </td>
-                    <td className="px-4 py-3.5 text-gray-600 text-xs">{(task as any).assignee?.full_name ?? '—'}</td>
-                    <td className="px-4 py-3.5">{formatDue(task.due_date)}</td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs text-gray-600">{fmtMins(minutesByTask[task.id] ?? 0)}</span>
-                        <TaskTimer
-                          taskId={task.id}
-                          projectId={projectId}
-                          isRunning={activeTimer?.task_id === task.id}
-                          startedAt={activeTimer?.started_at}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <select
-                        value={task.status}
-                        onChange={e => handleStatusChange(task.id, e.target.value as TaskStatus)}
-                        className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-[#E8611A]"
-                      >
-                        <option value="todo">To Do</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="done">Done</option>
-                      </select>
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <button onClick={() => handleDelete(task.id)} className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
-                    </td>
-                  </tr>
-                ))}
+                {tasks.map(task => {
+                  const subs = subtasksByTask[task.id] ?? []
+                  const prog = subtaskProgress(subs)
+                  const expanded = expandedTaskId === task.id
+                  return (
+                    <Fragment key={task.id}>
+                      <tr className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition group">
+                        <td className="px-5 py-3.5">
+                          <input
+                            type="checkbox"
+                            checked={task.status === 'done'}
+                            onChange={() => handleStatusChange(task.id, task.status === 'done' ? 'todo' : 'done')}
+                            className="w-4 h-4 rounded accent-[#E8611A] cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setExpandedTaskId(expanded ? null : task.id)}
+                              className="text-gray-400 hover:text-gray-700 text-xs w-4 flex-shrink-0"
+                              title={expanded ? 'Collapse' : 'Expand'}
+                            >
+                              {expanded ? '▾' : '▸'}
+                            </button>
+                            <div>
+                              <div className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</div>
+                              {task.description && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</div>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-gray-600 text-xs">{(task as any).assignee?.full_name ?? '—'}</td>
+                        <td className="px-4 py-3.5">{formatDue(task.due_date)}</td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-gray-600">{fmtMins(minutesByTask[task.id] ?? 0)}</span>
+                            <TaskTimer
+                              taskId={task.id}
+                              projectId={projectId}
+                              isRunning={activeTimer?.task_id === task.id}
+                              startedAt={activeTimer?.started_at}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex flex-col gap-1">
+                            <select
+                              value={task.status}
+                              onChange={e => handleStatusChange(task.id, e.target.value as TaskStatus)}
+                              className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-[#E8611A]"
+                            >
+                              <option value="todo">To Do</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="done">Done</option>
+                            </select>
+                            {prog && <span className="text-[11px] text-gray-400">☑ {prog} subtasks</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <button onClick={() => handleDelete(task.id)} className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition">✕</button>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr>
+                          <td colSpan={8} className="p-0">
+                            <TaskDetailPanel task={task} projectId={projectId} users={users} subtasks={subs} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           )}
@@ -351,41 +503,45 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                 {tasksByStatus[col.key].length === 0 && (
                   <div className="border-2 border-dashed border-gray-200 rounded-lg h-16 flex items-center justify-center text-xs text-gray-400">No tasks</div>
                 )}
-                {tasksByStatus[col.key].map(task => (
-                  <div key={task.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition group">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="text-sm font-medium text-gray-900 leading-snug">{task.title}</p>
-                      <button onClick={() => handleDelete(task.id)} className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition flex-shrink-0">✕</button>
+                {tasksByStatus[col.key].map(task => {
+                  const prog = subtaskProgress(subtasksByTask[task.id])
+                  return (
+                    <div key={task.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition group">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="text-sm font-medium text-gray-900 leading-snug">{task.title}</p>
+                        <button onClick={() => handleDelete(task.id)} className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition flex-shrink-0">✕</button>
+                      </div>
+                      {task.description && <p className="text-xs text-gray-400 mb-2 line-clamp-2">{task.description}</p>}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>
+                        {task.due_date && formatDue(task.due_date)}
+                        {prog && <span className="text-xs text-gray-400">☑ {prog}</span>}
+                        {(task as any).assignee && <span className="text-xs text-gray-400 ml-auto">{(task as any).assignee.full_name.split(' ')[0]}</span>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-100">
+                        <span className="text-xs text-gray-400">⏱ {fmtMins(minutesByTask[task.id] ?? 0)}</span>
+                        <span className="ml-auto">
+                          <TaskTimer
+                            taskId={task.id}
+                            projectId={projectId}
+                            isRunning={activeTimer?.task_id === task.id}
+                            startedAt={activeTimer?.started_at}
+                          />
+                        </span>
+                      </div>
+                      <div className="flex gap-1 mt-2">
+                        {col.key !== 'todo' && (
+                          <button onClick={() => handleStatusChange(task.id, col.key === 'done' ? 'in_progress' : 'todo')} className="text-xs text-gray-400 hover:text-gray-700 transition">← Back</button>
+                        )}
+                        {col.key !== 'done' && (
+                          <button onClick={() => handleStatusChange(task.id, col.key === 'todo' ? 'in_progress' : 'done')} className="text-xs text-[#E8611A] hover:text-[#d45516] font-medium transition ml-auto">
+                            {col.key === 'todo' ? 'Start →' : 'Complete ✓'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {task.description && <p className="text-xs text-gray-400 mb-2 line-clamp-2">{task.description}</p>}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>
-                      {task.due_date && formatDue(task.due_date)}
-                      {(task as any).assignee && <span className="text-xs text-gray-400 ml-auto">{(task as any).assignee.full_name.split(' ')[0]}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-100">
-                      <span className="text-xs text-gray-400">⏱ {fmtMins(minutesByTask[task.id] ?? 0)}</span>
-                      <span className="ml-auto">
-                        <TaskTimer
-                          taskId={task.id}
-                          projectId={projectId}
-                          isRunning={activeTimer?.task_id === task.id}
-                          startedAt={activeTimer?.started_at}
-                        />
-                      </span>
-                    </div>
-                    <div className="flex gap-1 mt-2">
-                      {col.key !== 'todo' && (
-                        <button onClick={() => handleStatusChange(task.id, col.key === 'done' ? 'in_progress' : 'todo')} className="text-xs text-gray-400 hover:text-gray-700 transition">← Back</button>
-                      )}
-                      {col.key !== 'done' && (
-                        <button onClick={() => handleStatusChange(task.id, col.key === 'todo' ? 'in_progress' : 'done')} className="text-xs text-[#E8611A] hover:text-[#d45516] font-medium transition ml-auto">
-                          {col.key === 'todo' ? 'Start →' : 'Complete ✓'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}
