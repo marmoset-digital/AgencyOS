@@ -4,9 +4,11 @@ import { useState, useTransition, useEffect, Fragment } from 'react'
 import { createTask, updateTaskStatus, deleteTask } from '@/app/actions/projects'
 import { startTimer, stopTimer, logTime } from '@/app/actions/time'
 import { editTask, addSubtask, toggleSubtask, deleteSubtask } from '@/app/actions/tasks'
+import { addComment, deleteComment } from '@/app/actions/comments'
 import type { Task, User } from '@/types'
 import type { ActiveTimer } from '@/types/time'
 import type { Subtask } from '@/types/subtask'
+import type { TaskComment } from '@/types/comment'
 
 const PRIORITY_COLOURS: Record<string, string> = {
   high:   'bg-red-100 text-red-700',
@@ -30,6 +32,8 @@ interface Props {
   minutesByTask: Record<string, number>
   activeTimer: ActiveTimer | null
   subtasksByTask: Record<string, Subtask[]>
+  commentsByTask: Record<string, TaskComment[]>
+  currentUserId: string
 }
 
 function fmtMins(m?: number) {
@@ -46,6 +50,10 @@ function liveElapsed(startedAt: string) {
   const sec = s % 60
   const pad = (n: number) => String(n).padStart(2, '0')
   return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`
+}
+
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 function formatDue(date?: string) {
@@ -111,25 +119,46 @@ function TaskTimer({
   )
 }
 
-// Expanded panel: subtask checklist + inline edit form.
+// Expanded panel: subtasks + inline edit + comments.
 function TaskDetailPanel({
   task,
   projectId,
   users,
   subtasks,
+  comments,
+  currentUserId,
 }: {
   task: Task
   projectId: string
   users: User[]
   subtasks: Subtask[]
+  comments: TaskComment[]
+  currentUserId: string
 }) {
   const [isPending, startT] = useTransition()
   const [editing, setEditing] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [mentionSel, setMentionSel] = useState<string[]>([])
+
+  const userName = (uid?: string | null) => users.find(u => u.id === uid)?.full_name ?? 'Someone'
+
+  function toggleMention(uid: string) {
+    setMentionSel(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid])
+  }
+
+  function postComment() {
+    const text = commentText.trim()
+    if (!text) return
+    const mentions = mentionSel
+    setCommentText('')
+    setMentionSel([])
+    startT(async () => { await addComment(task.id, projectId, text, mentions) })
+  }
 
   return (
-    <div className="bg-gray-50 border-t border-gray-100 px-6 py-4">
+    <div className="bg-gray-50 border-t border-gray-100 px-6 py-4 space-y-5">
       {/* Subtasks */}
-      <div className="mb-4">
+      <div>
         <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Subtasks</div>
         {subtasks.length === 0 && (
           <div className="text-xs text-gray-400 mb-2">No subtasks yet.</div>
@@ -161,6 +190,84 @@ function TaskDetailPanel({
           <input name="title" required placeholder="Add a subtask…" className="input text-sm flex-1" />
           <button type="submit" disabled={isPending} className="text-xs font-semibold text-[#E8611A] hover:text-[#d45516] disabled:opacity-50 whitespace-nowrap">+ Add</button>
         </form>
+      </div>
+
+      {/* Comments */}
+      <div>
+        <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Comments</div>
+        {comments.length === 0 && (
+          <div className="text-xs text-gray-400 mb-2">No comments yet.</div>
+        )}
+        <div className="flex flex-col gap-3 mb-3">
+          {comments.map(c => (
+            <div key={c.id} className="group/cm">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-xs font-semibold text-gray-700">
+                  {c.author_id === currentUserId ? 'You' : (c.author?.full_name ?? userName(c.author_id))}
+                </span>
+                <span className="text-[11px] text-gray-400">{fmtDateTime(c.created_at)}</span>
+                <button
+                  onClick={() => startT(async () => { await deleteComment(c.id, projectId) })}
+                  className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover/cm:opacity-100 transition ml-1"
+                  title="Delete comment"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="text-sm text-gray-800 whitespace-pre-wrap">{c.content}</div>
+              {c.mentions && c.mentions.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {c.mentions.map(uid => (
+                    <span key={uid} className="text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">@{userName(uid)}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Composer */}
+        <div className="bg-white border border-gray-200 rounded-xl p-3 max-w-2xl">
+          <textarea
+            value={commentText}
+            onChange={e => setCommentText(e.target.value)}
+            rows={2}
+            placeholder="Write a comment…"
+            className="input resize-none text-sm w-full mb-2"
+          />
+          {users.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <span className="text-[11px] text-gray-400 mr-1">Mention:</span>
+              {users.map(u => {
+                const on = mentionSel.includes(u.id)
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => toggleMention(u.id)}
+                    className={`text-xs px-2 py-0.5 rounded-full border transition ${
+                      on ? 'bg-[#E8611A] text-white border-[#E8611A]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    @{u.full_name.split(' ')[0]}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={postComment}
+              disabled={isPending || !commentText.trim()}
+              className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50"
+            >
+              Post comment
+            </button>
+            {mentionSel.length > 0 && (
+              <span className="text-[11px] text-gray-400">will notify {mentionSel.length} {mentionSel.length === 1 ? 'person' : 'people'}</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Edit task */}
@@ -225,7 +332,7 @@ function TaskDetailPanel({
   )
 }
 
-export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask }: Props) {
+export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask, commentsByTask, currentUserId }: Props) {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -257,6 +364,8 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
     in_progress: tasks.filter(t => t.status === 'in_progress'),
     done: tasks.filter(t => t.status === 'done'),
   }
+
+  const commentCount = (taskId: string) => (commentsByTask[taskId]?.length ?? 0)
 
   return (
     <div>
@@ -413,6 +522,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                 {tasks.map(task => {
                   const subs = subtasksByTask[task.id] ?? []
                   const prog = subtaskProgress(subs)
+                  const cCount = commentCount(task.id)
                   const expanded = expandedTaskId === task.id
                   return (
                     <Fragment key={task.id}>
@@ -467,7 +577,10 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                               <option value="in_progress">In Progress</option>
                               <option value="done">Done</option>
                             </select>
-                            {prog && <span className="text-[11px] text-gray-400">☑ {prog} subtasks</span>}
+                            <div className="flex items-center gap-2">
+                              {prog && <span className="text-[11px] text-gray-400">☑ {prog}</span>}
+                              {cCount > 0 && <span className="text-[11px] text-gray-400">💬 {cCount}</span>}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-right">
@@ -477,7 +590,14 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                       {expanded && (
                         <tr>
                           <td colSpan={8} className="p-0">
-                            <TaskDetailPanel task={task} projectId={projectId} users={users} subtasks={subs} />
+                            <TaskDetailPanel
+                              task={task}
+                              projectId={projectId}
+                              users={users}
+                              subtasks={subs}
+                              comments={commentsByTask[task.id] ?? []}
+                              currentUserId={currentUserId}
+                            />
                           </td>
                         </tr>
                       )}
@@ -505,6 +625,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                 )}
                 {tasksByStatus[col.key].map(task => {
                   const prog = subtaskProgress(subtasksByTask[task.id])
+                  const cCount = commentCount(task.id)
                   return (
                     <div key={task.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition group">
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -516,6 +637,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>
                         {task.due_date && formatDue(task.due_date)}
                         {prog && <span className="text-xs text-gray-400">☑ {prog}</span>}
+                        {cCount > 0 && <span className="text-xs text-gray-400">💬 {cCount}</span>}
                         {(task as any).assignee && <span className="text-xs text-gray-400 ml-auto">{(task as any).assignee.full_name.split(' ')[0]}</span>}
                       </div>
                       <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-100">
