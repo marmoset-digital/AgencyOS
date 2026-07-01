@@ -4,6 +4,7 @@ import Link from 'next/link'
 import TaskBoard from './TaskBoard'
 import { PROJECT_STAGES } from '@/types'
 import type { Subtask } from '@/types/subtask'
+import type { TaskComment } from '@/types/comment'
 
 const stageColours: Record<string, string> = {
   quote_sent:          'bg-purple-100 text-purple-700',
@@ -60,14 +61,15 @@ export default async function ProjectDetailPage({
     .eq('project_id', id)
     .order('created_at', { ascending: true })
 
-  // Fetch users for task assignment
+  // Fetch users for task assignment + @mentions
   const { data: users } = await supabase
     .from('users')
     .select('id, full_name, role')
     .order('full_name', { ascending: true })
 
-  // Fetch subtasks for this project's tasks
   const taskIds = (tasks ?? []).map(t => t.id)
+
+  // Fetch subtasks for this project's tasks
   const subtasksByTask: Record<string, Subtask[]> = {}
   if (taskIds.length > 0) {
     const { data: subtasks } = await supabase
@@ -78,6 +80,20 @@ export default async function ProjectDetailPage({
       .order('created_at', { ascending: true })
     for (const s of (subtasks ?? []) as Subtask[]) {
       (subtasksByTask[s.task_id] ??= []).push(s)
+    }
+  }
+
+  // Fetch comments for this project's tasks
+  const commentsByTask: Record<string, TaskComment[]> = {}
+  if (taskIds.length > 0) {
+    const { data: comments } = await supabase
+      .from('comments')
+      .select('*, author:author_id ( full_name )')
+      .eq('entity_type', 'task')
+      .in('entity_id', taskIds)
+      .order('created_at', { ascending: true })
+    for (const c of (comments ?? []) as TaskComment[]) {
+      (commentsByTask[c.entity_id] ??= []).push(c)
     }
   }
 
@@ -240,6 +256,8 @@ export default async function ProjectDetailPage({
           minutesByTask={minutesByTask}
           activeTimer={(activeTimer ?? null) as any}
           subtasksByTask={subtasksByTask as any}
+          commentsByTask={commentsByTask as any}
+          currentUserId={user?.id ?? ''}
         />
       </div>
     </div>
