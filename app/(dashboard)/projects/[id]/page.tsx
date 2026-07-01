@@ -2,9 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import TaskBoard from './TaskBoard'
+import RecurringTemplates from './RecurringTemplates'
 import { PROJECT_STAGES } from '@/types'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
+import type { RecurringTemplate } from '@/types/recurring'
+import { generateDueForProject } from '@/lib/recurring'
 
 const stageColours: Record<string, string> = {
   quote_sent:          'bg-purple-100 text-purple-700',
@@ -51,6 +54,14 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound()
 
+  // Auto-generate any due recurring tasks for this project (best-effort; deduped
+  // via last_generated_at). Runs before we fetch tasks so new ones show up now.
+  try {
+    await generateDueForProject(supabase, id, user?.id ?? null)
+  } catch {
+    // never let recurring generation break the page
+  }
+
   // Fetch tasks with assignee
   const { data: tasks } = await supabase
     .from('tasks')
@@ -96,6 +107,13 @@ export default async function ProjectDetailPage({
       (commentsByTask[c.entity_id] ??= []).push(c)
     }
   }
+
+  // Fetch recurring templates for this project
+  const { data: templates } = await supabase
+    .from('recurring_task_templates')
+    .select('*')
+    .eq('project_id', id)
+    .order('created_at', { ascending: true })
 
   // Fetch time logs for this project
   const { data: timeLogs } = await supabase
@@ -260,6 +278,14 @@ export default async function ProjectDetailPage({
           currentUserId={user?.id ?? ''}
         />
       </div>
+
+      {/* Recurring tasks */}
+      <RecurringTemplates
+        templates={(templates ?? []) as RecurringTemplate[]}
+        projectId={id}
+        companyId={project.company_id}
+        users={(users ?? []) as any}
+      />
     </div>
   )
 }
