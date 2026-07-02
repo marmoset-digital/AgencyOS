@@ -2,7 +2,21 @@
 // One org-wide connection stored in public.xero_connection (service-role only).
 // Never import this from a Client Component — it reads secrets + tokens.
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+
+// TRUE service-role client — bypasses RLS. We deliberately do NOT use the shared
+// createAdminClient() from lib/supabase/server: that one is built with
+// @supabase/ssr + the request cookies, so when a user is signed in their JWT
+// overrides the service-role key and RLS still applies. This client sends no
+// cookies/session, so it genuinely bypasses RLS (needed for the policy-less
+// xero_connection table and for writing invoices).
+export function adminDb() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  )
+}
 
 const AUTH_URL = 'https://login.xero.com/identity/connect/authorize'
 const TOKEN_URL = 'https://identity.xero.com/connect/token'
@@ -92,7 +106,7 @@ export interface XeroConnectionRow {
 }
 
 export async function getStoredConnection(): Promise<XeroConnectionRow | null> {
-  const admin = await createAdminClient()
+  const admin = adminDb()
   const { data } = await admin.from('xero_connection').select('*').eq('id', true).maybeSingle()
   return (data as XeroConnectionRow) ?? null
 }
@@ -105,10 +119,10 @@ export async function saveConnection(args: {
   expiresIn: number
   connectedBy?: string | null
 }) {
-  const admin = await createAdminClient()
+  const admin = adminDb()
   const expiresAt = new Date(Date.now() + args.expiresIn * 1000).toISOString()
   const now = new Date().toISOString()
-  await admin.from('xero_connection').upsert({
+  const { error } = await admin.from('xero_connection').upsert({
     id: true,
     tenant_id: args.tenantId,
     tenant_name: args.tenantName,
@@ -119,15 +133,16 @@ export async function saveConnection(args: {
     connected_at: now,
     updated_at: now,
   }, { onConflict: 'id' })
+  if (error) throw new Error(`Failed to store Xero connection: ${error.message}`)
 }
 
 export async function disconnect() {
-  const admin = await createAdminClient()
+  const admin = adminDb()
   await admin.from('xero_connection').delete().eq('id', true)
 }
 
 export async function markSynced() {
-  const admin = await createAdminClient()
+  const admin = adminDb()
   await admin.from('xero_connection').update({ last_synced_at: new Date().toISOString() }).eq('id', true)
 }
 
@@ -160,7 +175,7 @@ async function getValidAccess(): Promise<{ accessToken: string; tenantId: string
   }
 
   const t = await refreshTokens(conn.refresh_token)
-  const admin = await createAdminClient()
+  const admin = adminDb()
   await admin.from('xero_connection').update({
     access_token: t.access_token,
     refresh_token: t.refresh_token,

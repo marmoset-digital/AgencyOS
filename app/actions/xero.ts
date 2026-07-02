@@ -1,9 +1,9 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
-  disconnect, markSynced, fetchAllInvoices, fetchContacts,
+  adminDb, disconnect, markSynced, fetchAllInvoices, fetchContacts,
   mapStatus, xeroDate, type XeroContact,
 } from '@/lib/xero'
 
@@ -22,7 +22,7 @@ export async function syncInvoices(): Promise<{ error?: string; synced?: number;
   const { error } = await requireAdmin()
   if (error) return { error }
 
-  const admin = await createAdminClient()
+  const admin = adminDb()
 
   // contactId -> companyId
   const { data: companies } = await admin
@@ -96,7 +96,7 @@ export async function getXeroContacts(): Promise<{ contacts?: XeroContact[]; err
 export async function linkCompanyToXeroContact(companyId: string, xeroContactId: string) {
   const { error } = await requireAdmin()
   if (error) return { error }
-  const admin = await createAdminClient()
+  const admin = adminDb()
   const value = xeroContactId === '' ? null : xeroContactId
   const { error: e } = await admin.from('companies').update({ xero_contact_id: value }).eq('id', companyId)
   if (e) return { error: e.message }
