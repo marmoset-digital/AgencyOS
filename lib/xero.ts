@@ -9,9 +9,11 @@ const TOKEN_URL = 'https://identity.xero.com/connect/token'
 const CONNECTIONS_URL = 'https://api.xero.com/connections'
 const API_BASE = 'https://api.xero.com/api.xro/2.0'
 
-// Read-only scopes: invoices (transactions) + contacts, plus offline_access for refresh.
+// Read-only scopes: invoices + contacts, plus offline_access for refresh.
+// NOTE: apps created after 2 Mar 2026 only get the NEW granular scopes, so we use
+// accounting.invoices.read (not the old broad accounting.transactions.read).
 export const XERO_SCOPES =
-  'openid profile email offline_access accounting.transactions.read accounting.contacts.read'
+  'openid profile email offline_access accounting.invoices.read accounting.contacts.read'
 
 function creds() {
   const clientId = process.env.XERO_CLIENT_ID
