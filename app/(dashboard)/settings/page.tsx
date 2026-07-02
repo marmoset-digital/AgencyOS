@@ -34,7 +34,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-gray-500 mb-4">
           Used when a client has no specific billable rate, and as the default internal cost rate.
         </p>
-        <form action={updateSettings} className="flex flex-wrap items-end gap-4">
+        <form action={async (formData) => { 'use server'; await updateSettings(formData) }} className="flex flex-wrap items-end gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Default billable rate ($/hr)</label>
             <input name="default_billable_rate" type="number" step="0.01" min="0" defaultValue={settings.default_billable_rate ?? '0'} className="input w-48" />
@@ -58,7 +58,7 @@ export default async function SettingsPage() {
         </p>
         <div className="space-y-3">
           {(users ?? []).map(u => (
-            <form key={u.id} action={updateUserCostRate} className="flex items-center gap-3">
+            <form key={u.id} action={async (formData) => { 'use server'; await updateUserCostRate(formData) }} className="flex items-center gap-3">
               <input type="hidden" name="user_id" value={u.id} />
               <div className="w-56">
                 <div className="text-sm font-medium text-gray-900">{u.full_name}</div>
