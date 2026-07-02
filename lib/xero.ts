@@ -30,14 +30,16 @@ function basicAuth() {
 // ── OAuth ────────────────────────────────────────────────────────────────
 export function buildAuthorizeUrl(redirectUri: string, state: string) {
   const { clientId } = creds()
-  const p = new URLSearchParams({
-    response_type: 'code',
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope: XERO_SCOPES,
-    state,
-  })
-  return `${AUTH_URL}?${p.toString()}`
+  // Build manually with encodeURIComponent so spaces in `scope` become %20, not '+'.
+  // Xero's authorize endpoint does NOT decode '+' to a space and rejects it as invalid_scope.
+  const q = [
+    'response_type=code',
+    `client_id=${encodeURIComponent(clientId)}`,
+    `redirect_uri=${encodeURIComponent(redirectUri)}`,
+    `scope=${encodeURIComponent(XERO_SCOPES)}`,
+    `state=${encodeURIComponent(state)}`,
+  ].join('&')
+  return `${AUTH_URL}?${q}`
 }
 
 interface TokenResponse {
