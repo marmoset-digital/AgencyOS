@@ -1,16 +1,24 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { updateSettings, updateUserCostRate } from '@/app/actions/billing'
+import { getXeroStatus } from '@/lib/xero'
+import XeroSettings from './XeroSettings'
 
 export const metadata = { title: 'Settings' }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ xero?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const { data: me } = await supabase.from('users').select('role').eq('id', user.id).single()
   if (me?.role !== 'admin') redirect('/dashboard')
+
+  const { xero } = await searchParams
 
   const { data: settingsRows } = await supabase.from('app_settings').select('key, value')
   const settings: Record<string, string> = {}
@@ -21,11 +29,16 @@ export default async function SettingsPage() {
     .select('id, full_name, role, cost_rate')
     .order('full_name', { ascending: true })
 
+  const [xeroStatus, { data: companies }] = await Promise.all([
+    getXeroStatus(),
+    supabase.from('companies').select('id, name, status, xero_contact_id').order('name', { ascending: true }),
+  ])
+
   return (
     <div className="p-8 max-w-3xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-500 mt-1">Billing rates and defaults.</p>
+        <p className="text-gray-500 mt-1">Billing rates, defaults, and Xero.</p>
       </div>
 
       {/* Global default rates */}
@@ -50,7 +63,7 @@ export default async function SettingsPage() {
       </div>
 
       {/* Per-team-member cost rates */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
         <h2 className="font-semibold text-gray-900 mb-1">Team cost rates</h2>
         <p className="text-sm text-gray-500 mb-4">
           Notional internal cost per person ($/hr) — used for profitability, never billed to clients.
@@ -80,6 +93,13 @@ export default async function SettingsPage() {
           ))}
         </div>
       </div>
+
+      {/* Xero */}
+      <XeroSettings
+        status={xeroStatus}
+        companies={(companies ?? []).map(c => ({ id: c.id, name: c.name, status: c.status, xeroContactId: c.xero_contact_id ?? null }))}
+        notice={xero ?? null}
+      />
     </div>
   )
 }
