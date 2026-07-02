@@ -46,7 +46,7 @@ export default async function BillingPage({
   const { data: users } = await supabase.from('users').select('id, cost_rate')
   const { data: projects } = await supabase.from('projects').select('id, company_id')
   const { data: charges } = await supabase
-    .from('recurring_charges').select('*').eq('active', true)
+    .from('recurring_charges').select('*') // all (active + paused) so paused charges stay manageable
   const { data: logs } = await supabase
     .from('time_logs')
     .select('project_id, user_id, duration_minutes, is_billable, logged_at')
@@ -63,6 +63,7 @@ export default async function BillingPage({
   const chargesByCompany: Record<string, RecurringCharge[]> = {}
   for (const c of (charges ?? []) as RecurringCharge[]) {
     (chargesByCompany[c.company_id] ??= []).push(c)
+    if (!c.active) continue // paused: shown in the list, but not counted toward what's due
     const started = c.start_date <= period.end
     const dueThisMonth = c.cadence === 'monthly'
       ? started
@@ -88,6 +89,7 @@ export default async function BillingPage({
   const relevant = new Set<string>()
   for (const c of companies ?? []) if (c.status === 'active_client') relevant.add(c.id)
   for (const id of recurringByCompany.keys()) relevant.add(id)
+  for (const id of Object.keys(chargesByCompany)) relevant.add(id) // incl. paused, so they stay manageable
   for (const id of billableMinByCompany.keys()) relevant.add(id)
   for (const id of costByCompany.keys()) relevant.add(id)
 
