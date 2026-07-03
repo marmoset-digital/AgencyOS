@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { syncInvoices, disconnectXero, getXeroContacts, linkCompanyToXeroContact } from '@/app/actions/xero'
+import { syncInvoices, disconnectXero, getXeroContacts, linkCompanyToXeroContact, runAutoInvoiceNow } from '@/app/actions/xero'
 
 interface XeroStatus {
   connected: boolean
@@ -47,8 +47,24 @@ export default function XeroSettings({
     Object.fromEntries(companies.map(c => [c.id, c.xeroContactId]))
   )
   const [savedId, setSavedId] = useState<string | null>(null)
+  const [autoMsg, setAutoMsg] = useState<string | null>(null)
 
   const bannerNotice = notice ? NOTICES[notice] : null
+
+  function runAutoNow() {
+    setAutoMsg(null)
+    startTransition(async () => {
+      const r = await runAutoInvoiceNow()
+      if (r?.error) setAutoMsg(`Error: ${r.error}`)
+      else {
+        const created = r?.created ?? 0
+        const parts = [`Created ${created} draft${created === 1 ? '' : 's'}`]
+        if (r?.clients?.length) parts.push(r.clients.join(', '))
+        if (r?.errors?.length) parts.push(`Errors: ${r.errors.join('; ')}`)
+        setAutoMsg(parts.join(' — '))
+      }
+    })
+  }
 
   const visible = useMemo(() => {
     const f = filter.trim().toLowerCase()
@@ -146,6 +162,23 @@ export default function XeroSettings({
             </button>
           </div>
           {syncMsg && <div className="text-xs text-gray-500 mb-4">{syncMsg}</div>}
+
+          {/* Auto-invoicing */}
+          <div className="mt-2 mb-4 border-t border-gray-100 pt-4">
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">Auto-invoicing</h3>
+            <p className="text-xs text-gray-500 mb-2">
+              Runs daily and creates a draft for each opted-in client on their billing day
+              (set per client on the Billing page). Use the button to run today&apos;s due invoices now.
+            </p>
+            <button
+              onClick={runAutoNow}
+              disabled={isPending}
+              className="border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg transition disabled:opacity-50"
+            >
+              {isPending ? 'Working…' : 'Run auto-invoice now'}
+            </button>
+            {autoMsg && <div className="text-xs text-gray-600 mt-2">{autoMsg}</div>}
+          </div>
 
           {/* Client -> Xero contact linking */}
           <div className="mt-6 border-t border-gray-100 pt-5">

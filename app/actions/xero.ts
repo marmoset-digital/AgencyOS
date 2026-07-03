@@ -134,6 +134,7 @@ export async function createXeroDraftInvoice(
   const GST = 'OUTPUT'
 
   const lines: NewInvoiceLine[] = []
+  const includedChargeIds: string[] = []
 
   // Recurring charges due this month (monthly always; yearly when start month matches)
   const { data: charges } = await admin
@@ -142,7 +143,10 @@ export async function createXeroDraftInvoice(
     const started = c.start_date == null || c.start_date <= period.end
     const due = c.cadence === 'monthly' ? started
       : started && c.start_date != null && Number(String(c.start_date).slice(5, 7)) === period.m
-    if (due) lines.push({ Description: c.description, Quantity: 1, UnitAmount: Number(c.amount), AccountCode: accountCode, TaxType: GST })
+    if (due) {
+      lines.push({ Description: c.description, Quantity: 1, UnitAmount: Number(c.amount), AccountCode: accountCode, TaxType: GST })
+      includedChargeIds.push(c.id)
+    }
   }
 
   // Billable hours this month (via the client's projects)
@@ -198,9 +202,43 @@ export async function createXeroDraftInvoice(
     xero_synced_at: new Date().toISOString(),
   }, { onConflict: 'xero_invoice_id' })
 
+  // Mark included recurring charges invoiced for this period so auto-invoicing won't double up.
+  if (includedChargeIds.length) {
+    await admin.from('recurring_charges').update({ last_invoiced_period: period.ym }).in('id', includedChargeIds)
+  }
+
   revalidatePath('/invoices')
   revalidatePath('/dashboard')
   return { invoiceId: created.InvoiceID, number: created.InvoiceNumber, total: created.Total }
+}
+
+// Per-client auto-invoice opt-in toggle.
+export async function setAutoInvoice(companyId: string, on: boolean) {
+  const { error } = await requireAdmin()
+  if (error) return { error }
+  const admin = adminDb()
+  const { error: e } = await admin.from('companies').update({ auto_invoice: on }).eq('id', companyId)
+  if (e) return { error: e.message }
+  revalidatePath('/invoices')
+}
+
+// Admin "Run auto-invoice now" — runs today's due auto-invoicing on demand (same as the cron).
+export async function runAutoInvoiceNow(): Promise<{ error?: string; created?: number; clients?: string[]; errors?: string[] }> {
+  const { error } = await requireAdmin()
+  if (error) return { error }
+  const { runAutoInvoice } = await import('@/lib/autoInvoice')
+  try {
+    const r = await runAutoInvoice()
+    revalidatePath('/invoices')
+    revalidatePath('/dashboard')
+    return {
+      created: r.created.length,
+      clients: r.created.map(c => `${c.company} ($${c.total.toLocaleString('en-AU')})`),
+      errors: r.errors.map(e => `${e.company}: ${e.error}`),
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Auto-invoice run failed' }
+  }
 }
 
 // Link (or clear) a company's Xero contact.

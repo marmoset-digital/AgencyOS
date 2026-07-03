@@ -42,7 +42,7 @@ export default async function BillingPage({
   const defaultCost = parseFloat(settings.default_cost_rate || '0') || 0
 
   // Reference data
-  const { data: companies } = await supabase.from('companies').select('id, name, status, billable_rate, xero_contact_id')
+  const { data: companies } = await supabase.from('companies').select('id, name, status, billable_rate, xero_contact_id, auto_invoice')
   const { data: users } = await supabase.from('users').select('id, cost_rate')
   const { data: projects } = await supabase.from('projects').select('id, company_id')
   const { data: charges } = await supabase
@@ -113,6 +113,7 @@ export default async function BillingPage({
       amountToInvoice: recurring + billableAmount,
       internalCost,
       xeroLinked: c?.xero_contact_id != null,
+      autoInvoice: c?.auto_invoice ?? false,
     }
   }).sort((a, b) => b.amountToInvoice - a.amountToInvoice)
 

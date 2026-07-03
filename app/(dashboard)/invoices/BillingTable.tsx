@@ -2,7 +2,7 @@
 
 import { useState, useTransition, Fragment } from 'react'
 import { updateCompanyBillableRate, addRecurringCharge, toggleRecurringCharge, deleteRecurringCharge } from '@/app/actions/billing'
-import { createXeroDraftInvoice } from '@/app/actions/xero'
+import { createXeroDraftInvoice, setAutoInvoice } from '@/app/actions/xero'
 
 export interface RecurringCharge {
   id: string
@@ -25,6 +25,12 @@ export interface BillingRow {
   amountToInvoice: number
   internalCost: number
   xeroLinked: boolean
+  autoInvoice: boolean
+}
+
+function ordinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
 }
 
 function money(n: number) {
@@ -48,6 +54,24 @@ export default function BillingTable({ rows, chargesByCompany, defaultBillableRa
   const [isPending, startTransition] = useTransition()
   const [pushing, setPushing] = useState<string | null>(null)
   const [pushResult, setPushResult] = useState<Record<string, PushResult>>({})
+  const [autoState, setAutoState] = useState<Record<string, boolean>>(
+    Object.fromEntries(rows.map(r => [r.companyId, r.autoInvoice]))
+  )
+
+  function toggleAuto(companyId: string) {
+    const next = !autoState[companyId]
+    setAutoState(prev => ({ ...prev, [companyId]: next }))
+    startTransition(async () => { await setAutoInvoice(companyId, next) })
+  }
+
+  // Billing days for a client = day-of-month of each active MONTHLY charge's start date.
+  function billingDays(companyId: string): number[] {
+    const days = new Set<number>()
+    for (const c of chargesByCompany[companyId] ?? []) {
+      if (c.active && c.cadence === 'monthly' && c.start_date) days.add(Number(c.start_date.slice(8, 10)))
+    }
+    return [...days].sort((a, b) => a - b)
+  }
 
   function createDraft(companyId: string) {
     setPushing(companyId)
@@ -130,6 +154,25 @@ export default function BillingTable({ rows, chargesByCompany, defaultBillableRa
                               </div>
                             ) : (
                               <div className="text-xs text-gray-400">Link this client to a Xero contact (in Settings) to create invoices.</div>
+                            )}
+
+                            {/* Auto-invoice toggle */}
+                            {row.xeroLinked && (
+                              <label className="flex items-center gap-2 mt-3 text-sm text-gray-700 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={!!autoState[row.companyId]}
+                                  onChange={() => toggleAuto(row.companyId)}
+                                  disabled={isPending}
+                                  className="accent-[#E8611A]"
+                                />
+                                Auto-invoice monthly
+                                {billingDays(row.companyId).length > 0 && (
+                                  <span className="text-xs text-gray-400">
+                                    (drafts on the {billingDays(row.companyId).map(ordinal).join(', ')} each month)
+                                  </span>
+                                )}
+                              </label>
                             )}
                           </div>
 
