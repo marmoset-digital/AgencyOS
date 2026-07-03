@@ -58,7 +58,7 @@ export default function BillingTable({ rows, chargesByCompany, defaultBillableRa
       if (r?.error) setPushResult(prev => ({ ...prev, [companyId]: { ok: false, msg: r.error! } }))
       else setPushResult(prev => ({ ...prev, [companyId]: {
         ok: true,
-        msg: `Draft created${r?.total != null ? ` — ${money(r.total)} (ex GST)` : ''}.`,
+        msg: `Draft created${r?.total != null ? ` — ${money(r.total)} (inc GST)` : ''}.`,
         invoiceId: r?.invoiceId,
       } }))
     })
