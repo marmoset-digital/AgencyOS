@@ -126,9 +126,12 @@ export async function createXeroDraftInvoice(
   const settings: Record<string, string> = {}
   for (const r of settingsRows ?? []) settings[r.key] = r.value ?? ''
   const defaultBillable = parseFloat(settings.default_billable_rate || '0') || 0
-  const accountCode = (settings.xero_sales_account_code || '').trim() || undefined
+  // Always send an account code (Xero AU default sales = 200) so the draft is complete.
+  const accountCode = (settings.xero_sales_account_code || '200').trim() || '200'
   const dueDays = parseInt(settings.xero_invoice_due_days || '14', 10) || 14
   const billableRate = company.billable_rate != null ? Number(company.billable_rate) : defaultBillable
+  // GST on Income (10%) — AU system tax type. Amounts are GST-exclusive (added on top).
+  const GST = 'OUTPUT'
 
   const lines: NewInvoiceLine[] = []
 
@@ -139,7 +142,7 @@ export async function createXeroDraftInvoice(
     const started = c.start_date == null || c.start_date <= period.end
     const due = c.cadence === 'monthly' ? started
       : started && c.start_date != null && Number(String(c.start_date).slice(5, 7)) === period.m
-    if (due) lines.push({ Description: c.description, Quantity: 1, UnitAmount: Number(c.amount), AccountCode: accountCode })
+    if (due) lines.push({ Description: c.description, Quantity: 1, UnitAmount: Number(c.amount), AccountCode: accountCode, TaxType: GST })
   }
 
   // Billable hours this month (via the client's projects)
@@ -155,7 +158,7 @@ export async function createXeroDraftInvoice(
       const hours = Math.round((mins / 60) * 100) / 100
       lines.push({
         Description: `Billable hours — ${period.label}`,
-        Quantity: hours, UnitAmount: billableRate, AccountCode: accountCode,
+        Quantity: hours, UnitAmount: billableRate, AccountCode: accountCode, TaxType: GST,
       })
     }
   }

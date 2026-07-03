@@ -249,6 +249,7 @@ export interface NewInvoiceLine {
   Quantity: number
   UnitAmount: number
   AccountCode?: string
+  TaxType?: string
 }
 
 export interface NewInvoice {
@@ -288,6 +289,7 @@ export async function createDraftInvoice(inv: NewInvoice): Promise<CreatedInvoic
         Quantity: l.Quantity,
         UnitAmount: l.UnitAmount,
         ...(l.AccountCode ? { AccountCode: l.AccountCode } : {}),
+        ...(l.TaxType ? { TaxType: l.TaxType } : {}),
       })),
     }],
   }
