@@ -251,7 +251,8 @@ export function xeroDate(v?: string): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
 }
 
-// Map Xero status → our invoices.status (draft|sent|paid|overdue|voided|cancelled).
+// Map Xero status → our invoices.status. Allowed values (DB check constraint):
+// draft | sent | paid | overdue | voided  (note: no 'cancelled').
 export function mapStatus(xeroStatus?: string, dueDate?: string | null, amountDue?: number): string {
   switch ((xeroStatus ?? '').toUpperCase()) {
     case 'DRAFT': return 'draft'
@@ -262,7 +263,7 @@ export function mapStatus(xeroStatus?: string, dueDate?: string | null, amountDu
     }
     case 'PAID': return 'paid'
     case 'VOIDED': return 'voided'
-    case 'DELETED': return 'cancelled'
+    case 'DELETED': return 'voided' // no 'cancelled' in the constraint; treat deleted as voided
     default: return 'sent'
   }
 }
