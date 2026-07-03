@@ -2,6 +2,7 @@
 
 import { useState, useTransition, Fragment } from 'react'
 import { updateCompanyBillableRate, addRecurringCharge, toggleRecurringCharge, deleteRecurringCharge } from '@/app/actions/billing'
+import { createXeroDraftInvoice } from '@/app/actions/xero'
 
 export interface RecurringCharge {
   id: string
@@ -23,6 +24,7 @@ export interface BillingRow {
   billableAmount: number
   amountToInvoice: number
   internalCost: number
+  xeroLinked: boolean
 }
 
 function money(n: number) {
@@ -36,11 +38,31 @@ interface Props {
   rows: BillingRow[]
   chargesByCompany: Record<string, RecurringCharge[]>
   defaultBillableRate: number
+  month: string
 }
 
-export default function BillingTable({ rows, chargesByCompany, defaultBillableRate }: Props) {
+interface PushResult { ok: boolean; msg: string; invoiceId?: string }
+
+export default function BillingTable({ rows, chargesByCompany, defaultBillableRate, month }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [pushing, setPushing] = useState<string | null>(null)
+  const [pushResult, setPushResult] = useState<Record<string, PushResult>>({})
+
+  function createDraft(companyId: string) {
+    setPushing(companyId)
+    setPushResult(prev => { const n = { ...prev }; delete n[companyId]; return n })
+    startTransition(async () => {
+      const r = await createXeroDraftInvoice(companyId, month)
+      setPushing(null)
+      if (r?.error) setPushResult(prev => ({ ...prev, [companyId]: { ok: false, msg: r.error! } }))
+      else setPushResult(prev => ({ ...prev, [companyId]: {
+        ok: true,
+        msg: `Draft created${r?.total != null ? ` — ${money(r.total)} (inc GST)` : ''}.`,
+        invoiceId: r?.invoiceId,
+      } }))
+    })
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -80,6 +102,37 @@ export default function BillingTable({ rows, chargesByCompany, defaultBillableRa
                     <tr>
                       <td colSpan={7} className="p-0">
                         <div className="bg-gray-50 border-t border-gray-100 px-6 py-4 space-y-5">
+                          {/* Create draft invoice in Xero */}
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Invoice</div>
+                            {row.xeroLinked ? (
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => createDraft(row.companyId)}
+                                  disabled={isPending || pushing === row.companyId || row.amountToInvoice <= 0}
+                                  className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-3 py-2 rounded-lg transition disabled:opacity-50"
+                                  title={row.amountToInvoice <= 0 ? 'Nothing to invoice this month' : ''}
+                                >
+                                  {pushing === row.companyId ? 'Creating…' : 'Create draft in Xero'}
+                                </button>
+                                {pushResult[row.companyId] && (
+                                  <span className={`text-xs ${pushResult[row.companyId].ok ? 'text-green-700' : 'text-red-600'}`}>
+                                    {pushResult[row.companyId].msg}
+                                    {pushResult[row.companyId].ok && pushResult[row.companyId].invoiceId && (
+                                      <a
+                                        href={`https://go.xero.com/app/invoicing/edit/${pushResult[row.companyId].invoiceId}`}
+                                        target="_blank" rel="noopener noreferrer"
+                                        className="ml-2 font-semibold text-[#E8611A] hover:underline"
+                                      >Open in Xero →</a>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400">Link this client to a Xero contact (in Settings) to create invoices.</div>
+                            )}
+                          </div>
+
                           {/* Billable rate */}
                           <div>
                             <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Billable rate</div>
