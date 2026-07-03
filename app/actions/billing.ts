@@ -18,15 +18,20 @@ export async function updateSettings(formData: FormData) {
   if (error) return { error }
   const supabase = await createClient()
 
-  const billable = (formData.get('default_billable_rate') as string) || '0'
-  const cost = (formData.get('default_cost_rate') as string) || '0'
+  // Only persist the keys actually present in this form submission, so different
+  // settings forms (rates vs Xero invoicing) don't clobber each other.
   const now = new Date().toISOString()
-
-  const { error: e } = await supabase.from('app_settings').upsert([
-    { key: 'default_billable_rate', value: billable, updated_at: now },
-    { key: 'default_cost_rate', value: cost, updated_at: now },
-  ], { onConflict: 'key' })
-  if (e) return { error: e.message }
+  const keys = [
+    'default_billable_rate', 'default_cost_rate',
+    'xero_sales_account_code', 'xero_invoice_due_days',
+  ]
+  const rows = keys
+    .filter(k => formData.get(k) !== null)
+    .map(k => ({ key: k, value: String(formData.get(k) ?? ''), updated_at: now }))
+  if (rows.length) {
+    const { error: e } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
+    if (e) return { error: e.message }
+  }
 
   revalidatePath('/settings')
   revalidatePath('/invoices')

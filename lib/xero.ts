@@ -23,11 +23,11 @@ const TOKEN_URL = 'https://identity.xero.com/connect/token'
 const CONNECTIONS_URL = 'https://api.xero.com/connections'
 const API_BASE = 'https://api.xero.com/api.xro/2.0'
 
-// Read-only scopes: invoices + contacts, plus offline_access for refresh.
-// NOTE: apps created after 2 Mar 2026 only get the NEW granular scopes, so we use
-// accounting.invoices.read (not the old broad accounting.transactions.read).
+// Scopes: invoices (read+write, for sync AND creating drafts) + contacts (read),
+// plus offline_access for refresh. NOTE: apps created after 2 Mar 2026 only get the
+// NEW granular scopes — accounting.invoices covers both reading and writing invoices.
 export const XERO_SCOPES =
-  'openid profile email offline_access accounting.invoices.read accounting.contacts.read'
+  'openid profile email offline_access accounting.invoices accounting.contacts.read'
 
 function creds() {
   const clientId = process.env.XERO_CLIENT_ID
@@ -241,6 +241,71 @@ export async function fetchContacts(): Promise<XeroContact[]> {
     if (batch.length < 100) break
   }
   return all
+}
+
+// ── Write API (Phase 2c: create draft invoices) ──────────────────────────
+export interface NewInvoiceLine {
+  Description: string
+  Quantity: number
+  UnitAmount: number
+  AccountCode?: string
+}
+
+export interface NewInvoice {
+  contactId: string
+  date: string            // YYYY-MM-DD
+  dueDate: string         // YYYY-MM-DD
+  reference?: string
+  lineItems: NewInvoiceLine[]
+  gstExclusive: boolean   // true → LineAmountTypes 'Exclusive' (add 10% GST on top)
+}
+
+export interface CreatedInvoice {
+  InvoiceID: string
+  InvoiceNumber?: string
+  Total?: number
+  AmountDue?: number
+  CurrencyCode?: string
+  Status?: string
+  Date?: string
+  DueDate?: string
+}
+
+// POST a DRAFT ACCREC (sales) invoice to Xero. Uses a valid (refreshed) token + tenant.
+export async function createDraftInvoice(inv: NewInvoice): Promise<CreatedInvoice> {
+  const { accessToken, tenantId } = await getValidAccess()
+  const body = {
+    Invoices: [{
+      Type: 'ACCREC',
+      Status: 'DRAFT',
+      Contact: { ContactID: inv.contactId },
+      Date: inv.date,
+      DueDate: inv.dueDate,
+      Reference: inv.reference,
+      LineAmountTypes: inv.gstExclusive ? 'Exclusive' : 'Inclusive',
+      LineItems: inv.lineItems.map(l => ({
+        Description: l.Description,
+        Quantity: l.Quantity,
+        UnitAmount: l.UnitAmount,
+        ...(l.AccountCode ? { AccountCode: l.AccountCode } : {}),
+      })),
+    }],
+  }
+  const res = await fetch(`${API_BASE}/Invoices`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Xero-tenant-id': tenantId,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`Xero create invoice failed (${res.status}): ${await res.text()}`)
+  const data = await res.json()
+  const created = (data.Invoices as CreatedInvoice[])?.[0]
+  if (!created?.InvoiceID) throw new Error('Xero did not return a created invoice.')
+  return created
 }
 
 // Map a Xero /Date(1690000000000+0000)/ or ISO string to a YYYY-MM-DD date, or null.

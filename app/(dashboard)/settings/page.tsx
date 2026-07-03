@@ -94,6 +94,29 @@ export default async function SettingsPage({
         </div>
       </div>
 
+      {/* Xero invoicing defaults */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <h2 className="font-semibold text-gray-900 mb-1">Xero invoicing</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Used when creating draft invoices in Xero. The sales account code must exist in your
+          Xero chart of accounts (Australian default is <span className="font-mono">200</span>).
+          Amounts are treated as GST-exclusive (10% GST added on top).
+        </p>
+        <form action={async (formData) => { 'use server'; await updateSettings(formData) }} className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Sales account code</label>
+            <input name="xero_sales_account_code" type="text" defaultValue={settings.xero_sales_account_code ?? '200'} placeholder="200" className="input w-40" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Invoice due (days)</label>
+            <input name="xero_invoice_due_days" type="number" min="0" step="1" defaultValue={settings.xero_invoice_due_days ?? '14'} className="input w-40" />
+          </div>
+          <button type="submit" className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+            Save
+          </button>
+        </form>
+      </div>
+
       {/* Xero */}
       <XeroSettings
         status={xeroStatus}
