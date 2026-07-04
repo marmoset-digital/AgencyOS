@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const result = await runAutoInvoice()
+    const result = await runAutoInvoice('cron')
     return NextResponse.json({ ok: true, ...result })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : 'failed' }, { status: 500 })

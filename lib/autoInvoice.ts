@@ -5,7 +5,7 @@ import { adminDb, createDraftInvoice, type NewInvoiceLine } from '@/lib/xero'
 export interface AutoInvoiceResult {
   period: string
   day: number
-  created: { company: string; total: number; invoiceId: string }[]
+  created: { company: string; total: number; invoiceId: string; number?: string }[]
   skippedNoDue: number
   errors: { company: string; error: string }[]
 }
@@ -35,7 +35,7 @@ interface ChargeRow {
 // Create drafts for every opted-in, linked client whose recurring charge(s) are due
 // TODAY (by the day-of-month of each charge's start_date; month-end clamped), for the
 // current period, and not already invoiced this period. Retainers only (no hours).
-export async function runAutoInvoice(): Promise<AutoInvoiceResult> {
+export async function runAutoInvoice(trigger: 'cron' | 'manual' = 'cron'): Promise<AutoInvoiceResult> {
   const admin = adminDb()
   const t = melbourneToday()
   const result: AutoInvoiceResult = { period: t.period, day: t.D, created: [], skippedNoDue: 0, errors: [] }
@@ -116,12 +116,24 @@ export async function runAutoInvoice(): Promise<AutoInvoiceResult> {
       await admin.from('recurring_charges')
         .update({ last_invoiced_period: t.period })
         .in('id', cs.map(c => c.id))
-      result.created.push({ company: company.name, total: created.Total ?? 0, invoiceId: created.InvoiceID })
+      result.created.push({ company: company.name, total: created.Total ?? 0, invoiceId: created.InvoiceID, number: created.InvoiceNumber })
     } catch (e) {
       result.errors.push({ company: company.name, error: e instanceof Error ? e.message : 'draft failed' })
     }
   }
 
   if (result.created.length === 0 && result.errors.length === 0) result.skippedNoDue = ids.length
+
+  // Log the run (only when something actually happened) so it's visible in-app.
+  if (result.created.length > 0 || result.errors.length > 0) {
+    await admin.from('auto_invoice_runs').insert({
+      trigger,
+      period: t.period,
+      created_count: result.created.length,
+      details: result.created,
+      errors: result.errors,
+    })
+  }
+
   return result
 }
