@@ -250,7 +250,7 @@ export async function runAutoInvoiceNow(): Promise<{ error?: string; created?: n
   if (error) return { error }
   const { runAutoInvoice } = await import('@/lib/autoInvoice')
   try {
-    const r = await runAutoInvoice()
+    const r = await runAutoInvoice('manual')
     revalidatePath('/invoices')
     revalidatePath('/dashboard')
     return {

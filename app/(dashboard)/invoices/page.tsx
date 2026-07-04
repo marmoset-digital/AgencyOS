@@ -41,6 +41,13 @@ export default async function BillingPage({
   const defaultBillable = parseFloat(settings.default_billable_rate || '0') || 0
   const defaultCost = parseFloat(settings.default_cost_rate || '0') || 0
 
+  // Recent auto-invoicing runs (for the activity panel)
+  const { data: autoRuns } = await supabase
+    .from('auto_invoice_runs')
+    .select('id, ran_at, trigger, created_count, details, errors')
+    .order('ran_at', { ascending: false })
+    .limit(8)
+
   // Reference data
   const { data: companies } = await supabase.from('companies').select('id, name, status, billable_rate, xero_contact_id, auto_invoice')
   const { data: users } = await supabase.from('users').select('id, cost_rate')
@@ -150,6 +157,47 @@ export default async function BillingPage({
           <div className="text-xl font-bold text-gray-900">${(totals.invoice - totals.cost).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
         </div>
       </div>
+
+      {autoRuns && autoRuns.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+          <h2 className="font-semibold text-gray-900 mb-3">Recent auto-invoicing</h2>
+          <div className="space-y-3">
+            {autoRuns.map(run => (
+              <div key={run.id} className="text-sm border-b border-gray-50 last:border-0 pb-3 last:pb-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-gray-700 font-medium">
+                    {new Date(run.ran_at).toLocaleString('en-AU', { timeZone: 'Australia/Melbourne', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wide bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{run.trigger}</span>
+                  <span className="text-gray-400 text-xs">{run.created_count} draft{run.created_count === 1 ? '' : 's'}</span>
+                </div>
+                {Array.isArray(run.details) && run.details.length > 0 && (
+                  <div className="flex flex-col gap-0.5 pl-1">
+                    {run.details.map((d: { company?: string; total?: number; invoiceId?: string; number?: string }, i: number) => (
+                      <div key={i} className="text-xs text-gray-600 flex items-center gap-2">
+                        <span>{d.company}</span>
+                        <span className="text-gray-400">${Number(d.total ?? 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        {d.invoiceId && (
+                          <a href={`https://go.xero.com/app/invoicing/edit/${d.invoiceId}`} target="_blank" rel="noopener noreferrer" className="text-[#E8611A] hover:underline">
+                            {d.number || 'Open in Xero'} →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {Array.isArray(run.errors) && run.errors.length > 0 && (
+                  <div className="flex flex-col gap-0.5 pl-1 mt-1">
+                    {run.errors.map((e: { company?: string; error?: string }, i: number) => (
+                      <div key={i} className="text-xs text-red-600">{e.company}: {e.error}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <BillingTable
         rows={rows}
