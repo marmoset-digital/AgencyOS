@@ -83,7 +83,11 @@ export default function XeroSettings({
     startTransition(async () => {
       const r = await syncInvoices()
       if (r?.error) setSyncMsg(`Error: ${r.error}`)
-      else setSyncMsg(`Synced ${r?.synced ?? 0} invoice(s). Skipped ${r?.skipped ?? 0} (unlinked contact).`)
+      else setSyncMsg(
+        `Synced ${r?.synced ?? 0} outstanding invoice(s)` +
+        (r?.reconciled ? `, marked ${r.reconciled} paid` : '') +
+        `. Skipped ${r?.skipped ?? 0} (unlinked contact).`
+      )
     })
   }
 
