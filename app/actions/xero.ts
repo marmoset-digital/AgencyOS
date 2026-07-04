@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
-  adminDb, disconnect, markSynced, fetchAllInvoices, fetchContacts,
+  adminDb, disconnect, markSynced, fetchOutstandingInvoices, fetchContacts,
   createDraftInvoice, mapStatus, xeroDate,
   type XeroContact, type NewInvoiceLine,
 } from '@/lib/xero'
@@ -31,7 +31,7 @@ async function requireAdmin() {
 
 // Pull sales invoices from Xero and upsert into `invoices`, matched to companies
 // via companies.xero_contact_id. Invoices whose Xero contact isn't linked are skipped.
-export async function syncInvoices(): Promise<{ error?: string; synced?: number; skipped?: number }> {
+export async function syncInvoices(): Promise<{ error?: string; synced?: number; skipped?: number; reconciled?: number }> {
   const { error } = await requireAdmin()
   if (error) return { error }
 
@@ -45,18 +45,21 @@ export async function syncInvoices(): Promise<{ error?: string; synced?: number;
 
   let invoices
   try {
-    invoices = await fetchAllInvoices()
+    invoices = await fetchOutstandingInvoices() // ACCREC + AUTHORISED only (outstanding)
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Xero sync failed' }
   }
 
+  const now = new Date().toISOString()
   let synced = 0, skipped = 0
   const rows = []
+  const seenXeroIds = new Set<string>()
   for (const inv of invoices) {
     const contactId = inv.Contact?.ContactID
     const companyId = contactId ? companyByContact.get(contactId) : undefined
     if (!companyId) { skipped++; continue }
     const due = xeroDate(inv.DueDate)
+    seenXeroIds.add(inv.InvoiceID)
     rows.push({
       xero_invoice_id: inv.InvoiceID,
       company_id: companyId,
@@ -69,7 +72,7 @@ export async function syncInvoices(): Promise<{ error?: string; synced?: number;
       due_date: due,
       paid_date: xeroDate(inv.FullyPaidOnDate),
       line_items: inv.LineItems ?? [],
-      xero_synced_at: new Date().toISOString(),
+      xero_synced_at: now,
     })
     synced++
   }
@@ -78,12 +81,31 @@ export async function syncInvoices(): Promise<{ error?: string; synced?: number;
     const { error: e } = await admin.from('invoices').upsert(rows, { onConflict: 'xero_invoice_id' })
     if (e) return { error: e.message }
   }
+
+  // Reconcile: any invoice we previously had as open (sent/overdue) for a linked
+  // client that's no longer in the outstanding set has been paid (or voided) in Xero
+  // — mark it paid so the dashboard's overdue list stays accurate.
+  const linkedCompanyIds = [...new Set(companyByContact.values())]
+  let reconciled = 0
+  if (linkedCompanyIds.length) {
+    const { data: openOurs } = await admin
+      .from('invoices').select('id, xero_invoice_id')
+      .in('company_id', linkedCompanyIds).in('status', ['sent', 'overdue'])
+    const droppedIds = (openOurs ?? [])
+      .filter(o => o.xero_invoice_id && !seenXeroIds.has(o.xero_invoice_id))
+      .map(o => o.id)
+    if (droppedIds.length) {
+      await admin.from('invoices').update({ status: 'paid', xero_synced_at: now }).in('id', droppedIds)
+      reconciled = droppedIds.length
+    }
+  }
+
   await markSynced()
 
   revalidatePath('/invoices')
   revalidatePath('/dashboard')
   revalidatePath('/settings')
-  return { synced, skipped }
+  return { synced, skipped, reconciled }
 }
 
 export async function disconnectXero() {

@@ -215,11 +215,15 @@ export interface XeroInvoice {
   LineItems?: unknown[]
 }
 
-// Sales invoices only (ACCREC), paged.
-export async function fetchAllInvoices(): Promise<XeroInvoice[]> {
+// OUTSTANDING sales invoices only: ACCREC + AUTHORISED (approved & awaiting/partly
+// paid). Excludes paid, voided, draft and all history — keeps the sync light and the
+// data relevant (these are what can be overdue). Paged.
+export async function fetchOutstandingInvoices(): Promise<XeroInvoice[]> {
   const all: XeroInvoice[] = []
   for (let page = 1; page <= 50; page++) {
-    const data = await apiGet(`/Invoices?where=${encodeURIComponent('Type=="ACCREC"')}&page=${page}&pageSize=100`)
+    const data = await apiGet(
+      `/Invoices?where=${encodeURIComponent('Type=="ACCREC" AND Status=="AUTHORISED"')}&page=${page}&pageSize=100`
+    )
     const batch = (data.Invoices as XeroInvoice[]) ?? []
     all.push(...batch)
     if (batch.length < 100) break
