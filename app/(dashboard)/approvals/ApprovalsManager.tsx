@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { revokeApproval } from '@/app/actions/approvals'
+import { approvalLink as linkFor } from '@/lib/publicUrl'
 import type { RollupRow } from './page'
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -18,10 +19,6 @@ const FILTERS = [
   { key: 'approved', label: 'Approved' },
   { key: 'changes_requested', label: 'Changes requested' },
 ]
-
-function linkFor(token: string) {
-  return typeof window !== 'undefined' ? `${window.location.origin}/approve/${token}` : `/approve/${token}`
-}
 
 export default function ApprovalsRollup({ rows }: { rows: RollupRow[] }) {
   const router = useRouter()

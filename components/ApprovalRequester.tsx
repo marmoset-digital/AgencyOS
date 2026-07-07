@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createApproval, revokeApproval } from '@/app/actions/approvals'
+import { approvalLink as linkFor } from '@/lib/publicUrl'
 
 export interface ApprovalContact { id: string; first_name: string | null; last_name: string | null; is_primary?: boolean | null }
 export interface ApprovalLink { id: string; label: string; url: string }
@@ -23,9 +24,6 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   revoked: { label: 'Revoked', cls: 'bg-gray-100 text-gray-500' },
 }
 
-function linkFor(token: string) {
-  return typeof window !== 'undefined' ? `${window.location.origin}/approve/${token}` : `/approve/${token}`
-}
 function contactName(c?: ApprovalContact) {
   if (!c) return null
   return [c.first_name, c.last_name].filter(Boolean).join(' ') || null
