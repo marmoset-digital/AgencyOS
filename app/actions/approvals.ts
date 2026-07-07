@@ -31,6 +31,8 @@ export async function createApproval(formData: FormData): Promise<Result> {
   const linkRaw = String(formData.get('link_url') ?? '').trim()
   const projectId = String(formData.get('project_id') ?? '').trim()
   const companyId = String(formData.get('company_id') ?? '').trim()
+  const taskId = String(formData.get('task_id') ?? '').trim()
+  const contactId = String(formData.get('contact_id') ?? '').trim()
 
   if (!title) return { error: 'Give the approval a title.' }
 
@@ -49,15 +51,18 @@ export async function createApproval(formData: FormData): Promise<Result> {
     link_url,
     project_id: projectId || null,
     company_id: companyId || null,
+    task_id: taskId || null,
+    contact_id: contactId || null,
     created_by: user.id,
   })
   if (error) return { error: error.message }
 
+  if (projectId) revalidatePath(`/projects/${projectId}`)
   revalidatePath('/approvals')
   return { ok: true, token }
 }
 
-export async function revokeApproval(id: string): Promise<Result> {
+export async function revokeApproval(id: string, projectId?: string): Promise<Result> {
   const supabase = await createClient()
   const { error } = await supabase
     .from('approvals')
@@ -65,6 +70,7 @@ export async function revokeApproval(id: string): Promise<Result> {
     .eq('id', id)
     .eq('status', 'pending')
   if (error) return { error: error.message }
+  if (projectId) revalidatePath(`/projects/${projectId}`)
   revalidatePath('/approvals')
   return { ok: true }
 }
@@ -91,7 +97,7 @@ export async function submitApprovalDecision(
 
   const { data: approval } = await adminDb
     .from('approvals')
-    .select('id, status')
+    .select('id, status, project_id')
     .eq('token', token)
     .maybeSingle()
 
@@ -111,6 +117,7 @@ export async function submitApprovalDecision(
   if (error) return { error: error.message }
 
   revalidatePath(`/approve/${token}`)
+  if (approval.project_id) revalidatePath(`/projects/${approval.project_id}`)
   revalidatePath('/approvals')
   return { ok: true }
 }
