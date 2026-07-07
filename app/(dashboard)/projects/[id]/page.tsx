@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import TaskBoard from './TaskBoard'
 import RecurringTemplates from './RecurringTemplates'
+import ProjectTeam from './ProjectTeam'
 import { PROJECT_STAGES } from '@/types'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
@@ -10,14 +11,14 @@ import type { RecurringTemplate } from '@/types/recurring'
 import { generateDueForProject } from '@/lib/recurring'
 
 const stageColours: Record<string, string> = {
-  quote_sent:          'bg-purple-100 text-purple-700',
-  proposal_accepted:   'bg-blue-100 text-blue-700',
-  onboarding:          'bg-yellow-100 text-yellow-700',
-  active:              'bg-green-100 text-green-700',
-  awaiting_feedback:   'bg-orange-100 text-orange-700',
-  paused:              'bg-gray-100 text-gray-600',
-  complete:            'bg-teal-100 text-teal-700',
-  invoiced_closed:     'bg-gray-100 text-gray-500',
+  quote_sent: 'bg-purple-100 text-purple-700',
+  proposal_accepted: 'bg-blue-100 text-blue-700',
+  onboarding: 'bg-yellow-100 text-yellow-700',
+  active: 'bg-green-100 text-green-700',
+  awaiting_feedback: 'bg-orange-100 text-orange-700',
+  paused: 'bg-gray-100 text-gray-600',
+  complete: 'bg-teal-100 text-teal-700',
+  invoiced_closed: 'bg-gray-100 text-gray-500',
 }
 
 const stageLabels: Record<string, string> = Object.fromEntries(
@@ -30,6 +31,8 @@ function formatMinutes(m: number) {
   const mm = m % 60
   return h ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`
 }
+
+interface Person { id: string; full_name: string; role?: string | null }
 
 export default async function ProjectDetailPage({
   params,
@@ -72,11 +75,28 @@ export default async function ProjectDetailPage({
     .eq('project_id', id)
     .order('created_at', { ascending: true })
 
-  // Fetch users for task assignment + @mentions
+  // Fetch users for @mentions / picker
   const { data: users } = await supabase
     .from('users')
     .select('id, full_name, role')
     .order('full_name', { ascending: true })
+
+  // Fetch this project's team members
+  const { data: memberRows } = await supabase
+    .from('project_members')
+    .select('user:user_id ( id, full_name, role )')
+    .eq('project_id', id)
+  const members = (((memberRows ?? []) as unknown as { user: Person | Person[] | null }[])
+    .map(r => (Array.isArray(r.user) ? r.user[0] : r.user))
+    .filter(Boolean)) as Person[]
+
+  // Assignee/mention list = the project's team (members + manager). Fallback to all
+  // users if the project has no team set yet, so tasks are always assignable.
+  const assigneeMap = new Map<string, Person>()
+  for (const m of members) assigneeMap.set(m.id, m)
+  if (project.assigned_user) assigneeMap.set(project.assigned_user.id, project.assigned_user as Person)
+  let assigneeList = [...assigneeMap.values()]
+  if (assigneeList.length === 0) assigneeList = (users ?? []) as Person[]
 
   const taskIds = (tasks ?? []).map(t => t.id)
 
@@ -210,7 +230,7 @@ export default async function ProjectDetailPage({
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-400 mb-1">Assigned To</div>
+          <div className="text-xs text-gray-400 mb-1">Manager</div>
           <div className="font-medium text-gray-900 text-sm">
             {project.assigned_user?.full_name ?? <span className="text-gray-400">Unassigned</span>}
           </div>
@@ -222,10 +242,10 @@ export default async function ProjectDetailPage({
             {formattedStart && formattedEnd
               ? `${formattedStart} → ${formattedEnd}`
               : formattedEnd
-              ? `Due ${formattedEnd}`
-              : formattedStart
-              ? `Started ${formattedStart}`
-              : <span className="text-gray-400">No dates set</span>}
+                ? `Due ${formattedEnd}`
+                : formattedStart
+                  ? `Started ${formattedStart}`
+                  : <span className="text-gray-400">No dates set</span>}
           </div>
         </div>
 
@@ -250,6 +270,14 @@ export default async function ProjectDetailPage({
         </div>
       </div>
 
+      {/* Team */}
+      <ProjectTeam
+        projectId={id}
+        members={members}
+        allUsers={(users ?? []) as Person[]}
+        managerId={project.assigned_to ?? null}
+      />
+
       {/* Retainer caps */}
       {project.type === 'retainer' && (project.monthly_hours_cap || project.monthly_tasks_cap) && (
         <div className="flex items-center gap-4 mb-6 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 text-sm text-blue-700">
@@ -267,14 +295,14 @@ export default async function ProjectDetailPage({
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Tasks</h2>
         <TaskBoard
-          tasks={(tasks ?? []) as any}
+          tasks={(tasks ?? []) as never}
           projectId={id}
           companyId={project.company_id}
-          users={(users ?? []) as any}
+          users={assigneeList as never}
           minutesByTask={minutesByTask}
-          activeTimer={(activeTimer ?? null) as any}
-          subtasksByTask={subtasksByTask as any}
-          commentsByTask={commentsByTask as any}
+          activeTimer={(activeTimer ?? null) as never}
+          subtasksByTask={subtasksByTask as never}
+          commentsByTask={commentsByTask as never}
           currentUserId={user?.id ?? ''}
         />
       </div>
@@ -284,7 +312,7 @@ export default async function ProjectDetailPage({
         templates={(templates ?? []) as RecurringTemplate[]}
         projectId={id}
         companyId={project.company_id}
-        users={(users ?? []) as any}
+        users={assigneeList as never}
       />
     </div>
   )
