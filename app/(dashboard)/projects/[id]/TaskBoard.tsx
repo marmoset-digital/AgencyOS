@@ -5,7 +5,7 @@ import { createTask, updateTaskStatus, deleteTask } from '@/app/actions/projects
 import { startTimer, stopTimer, logTime } from '@/app/actions/time'
 import { editTask, addSubtask, toggleSubtask, deleteSubtask } from '@/app/actions/tasks'
 import { addComment, deleteComment } from '@/app/actions/comments'
-import ApprovalRequester, { type ApprovalContact, type ApprovalItem } from '@/components/ApprovalRequester'
+import ApprovalRequester, { type ApprovalContact, type ApprovalItem, type ApprovalLink } from '@/components/ApprovalRequester'
 import type { Task, User } from '@/types'
 import type { ActiveTimer } from '@/types/time'
 import type { Subtask } from '@/types/subtask'
@@ -37,6 +37,7 @@ interface Props {
   currentUserId: string
   contacts: ApprovalContact[]
   approvalsByTask: Record<string, ApprovalItem[]>
+  projectLinks: ApprovalLink[]
 }
 
 function fmtMins(m?: number) {
@@ -140,6 +141,7 @@ function TaskDetailPanel({
   users,
   contacts,
   approvals,
+  links,
   subtasks,
   comments,
   currentUserId,
@@ -150,6 +152,7 @@ function TaskDetailPanel({
   users: User[]
   contacts: ApprovalContact[]
   approvals: ApprovalItem[]
+  links: ApprovalLink[]
   subtasks: Subtask[]
   comments: TaskComment[]
   currentUserId: string
@@ -189,6 +192,7 @@ function TaskDetailPanel({
             defaultTitle={task.title}
             contacts={contacts}
             approvals={approvals}
+            links={links}
           />
         </div>
       )}
@@ -372,7 +376,7 @@ function TaskDetailPanel({
   )
 }
 
-export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask, commentsByTask, currentUserId, contacts, approvalsByTask }: Props) {
+export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask, commentsByTask, currentUserId, contacts, approvalsByTask, projectLinks }: Props) {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -647,6 +651,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                               users={users}
                               contacts={contacts}
                               approvals={approvalsFor(task.id)}
+                              links={projectLinks}
                               subtasks={subs}
                               comments={commentsByTask[task.id] ?? []}
                               currentUserId={currentUserId}

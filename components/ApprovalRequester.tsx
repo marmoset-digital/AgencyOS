@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createApproval, revokeApproval } from '@/app/actions/approvals'
 
 export interface ApprovalContact { id: string; first_name: string | null; last_name: string | null; is_primary?: boolean | null }
+export interface ApprovalLink { id: string; label: string; url: string }
 export interface ApprovalItem {
   id: string
   token: string
@@ -31,7 +32,7 @@ function contactName(c?: ApprovalContact) {
 }
 
 export default function ApprovalRequester({
-  scope, projectId, companyId, taskId, defaultTitle, contacts, approvals,
+  scope, projectId, companyId, taskId, defaultTitle, contacts, approvals, links,
 }: {
   scope: 'task' | 'project'
   projectId: string
@@ -40,6 +41,7 @@ export default function ApprovalRequester({
   defaultTitle: string
   contacts: ApprovalContact[]
   approvals: ApprovalItem[]
+  links: ApprovalLink[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -47,18 +49,25 @@ export default function ApprovalRequester({
   const [title, setTitle] = useState(defaultTitle)
   const [contactId, setContactId] = useState('')
   const [message, setMessage] = useState('')
+  const [linkChoice, setLinkChoice] = useState('') // '' = none, link id, or '__custom'
   const [linkUrl, setLinkUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
   const byId = (id: string | null) => contacts.find(c => c.id === id)
 
+  // The work link is either one of the project's Docs & Links, or a pasted URL.
+  const effectiveLink = () => {
+    if (linkChoice && linkChoice !== '__custom') return links.find(l => l.id === linkChoice)?.url ?? ''
+    return linkUrl
+  }
+
   function create() {
     setError(null)
     const fd = new FormData()
     fd.set('title', title)
     fd.set('message', message)
-    fd.set('link_url', linkUrl)
+    fd.set('link_url', effectiveLink())
     fd.set('project_id', projectId)
     fd.set('company_id', companyId)
     if (taskId) fd.set('task_id', taskId)
@@ -66,7 +75,7 @@ export default function ApprovalRequester({
     startTransition(async () => {
       const res = await createApproval(fd)
       if (res.error) { setError(res.error); return }
-      setMessage(''); setLinkUrl(''); setContactId(''); setTitle(defaultTitle); setOpen(false)
+      setMessage(''); setLinkChoice(''); setLinkUrl(''); setContactId(''); setTitle(defaultTitle); setOpen(false)
       router.refresh()
     })
   }
@@ -125,7 +134,19 @@ export default function ApprovalRequester({
             ))}
           </select>
           <textarea value={message} onChange={e => setMessage(e.target.value)} rows={2} placeholder="Message to the client (optional)" className="input text-sm w-full" />
-          <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="Link to the work (optional)" className="input text-sm w-full" />
+          {links.length > 0 && (
+            <select value={linkChoice} onChange={e => setLinkChoice(e.target.value)} className="input text-sm w-full">
+              <option value="">No link to the work</option>
+              {links.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+              <option value="__custom">Paste a link instead…</option>
+            </select>
+          )}
+          {(links.length === 0 || linkChoice === '__custom') && (
+            <input value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="Paste the link to the work (optional)" className="input text-sm w-full" />
+          )}
+          {links.length > 0 && linkChoice === '' && (
+            <p className="text-[11px] text-gray-400">Tip: add the deliverable to this project’s Docs &amp; Links to pick it here.</p>
+          )}
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex items-center gap-2">
             <button onClick={create} disabled={isPending || !title.trim()} className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition disabled:opacity-50">

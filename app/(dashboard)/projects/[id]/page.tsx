@@ -5,7 +5,7 @@ import TaskBoard from './TaskBoard'
 import RecurringTemplates from './RecurringTemplates'
 import ProjectTeam from './ProjectTeam'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
-import ApprovalRequester, { type ApprovalContact, type ApprovalItem } from '@/components/ApprovalRequester'
+import ApprovalRequester, { type ApprovalContact, type ApprovalItem, type ApprovalLink } from '@/components/ApprovalRequester'
 import { PROJECT_STAGES } from '@/types'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
@@ -319,6 +319,7 @@ export default async function ProjectDetailPage({
           defaultTitle={`${project.name} — sign-off`}
           contacts={(contacts ?? []) as ApprovalContact[]}
           approvals={projectApprovals}
+          links={(links ?? []) as ApprovalLink[]}
         />
       </div>
 
@@ -350,6 +351,7 @@ export default async function ProjectDetailPage({
           currentUserId={user?.id ?? ''}
           contacts={(contacts ?? []) as ApprovalContact[]}
           approvalsByTask={approvalsByTask}
+          projectLinks={(links ?? []) as ApprovalLink[]}
         />
       </div>
 
