@@ -4,6 +4,7 @@ import Link from 'next/link'
 import TaskBoard from './TaskBoard'
 import RecurringTemplates from './RecurringTemplates'
 import ProjectTeam from './ProjectTeam'
+import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
 import { PROJECT_STAGES } from '@/types'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
@@ -134,6 +135,12 @@ export default async function ProjectDetailPage({
     .select('*')
     .eq('project_id', id)
     .order('created_at', { ascending: true })
+
+  // Fetch this project's contextual links + custom fields
+  const [{ data: links }, { data: fields }] = await Promise.all([
+    supabase.from('resource_links').select('id, label, url').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
+    supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
+  ])
 
   // Fetch time logs for this project
   const { data: timeLogs } = await supabase
@@ -277,6 +284,16 @@ export default async function ProjectDetailPage({
         allUsers={(users ?? []) as Person[]}
         managerId={project.assigned_to ?? null}
       />
+
+      {/* Docs & Links + Custom Fields */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+        <ClientData
+          entityType="project"
+          entityId={id}
+          links={(links ?? []) as ResourceLink[]}
+          fields={(fields ?? []) as CustomField[]}
+        />
+      </div>
 
       {/* Retainer caps */}
       {project.type === 'retainer' && (project.monthly_hours_cap || project.monthly_tasks_cap) && (
