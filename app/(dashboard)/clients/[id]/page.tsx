@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { DeleteContactButton } from './contacts/DeleteContactButton'
+import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
 
 const statusColours: Record<string, string> = {
   lead: 'bg-blue-100 text-blue-700',
@@ -14,13 +15,15 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: company }, { data: contacts }, { data: projects }, { data: invoices }, { data: tickets }] =
+  const [{ data: company }, { data: contacts }, { data: projects }, { data: invoices }, { data: tickets }, { data: links }, { data: fields }] =
     await Promise.all([
       supabase.from('companies').select('*').eq('id', id).single(),
       supabase.from('contacts').select('*').eq('company_id', id).order('is_primary', { ascending: false }),
       supabase.from('projects').select('id, name, stage, type, start_date, end_date').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('invoices').select('id, invoice_number, status, amount, due_date').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('support_tickets').select('id, subject, status, priority, created_at').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
+      supabase.from('resource_links').select('id, label, url').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
+      supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
     ])
 
   if (!company) notFound()
@@ -112,6 +115,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               </div>
             </dl>
           </div>
+
+          {/* Docs & Links + Custom Fields */}
+          <ClientData
+            entityType="company"
+            entityId={id}
+            links={(links ?? []) as ResourceLink[]}
+            fields={(fields ?? []) as CustomField[]}
+          />
 
           {/* Notes */}
           {company.notes && (
