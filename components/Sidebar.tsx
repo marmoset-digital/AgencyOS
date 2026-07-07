@@ -18,6 +18,7 @@ const navItems = [
 ]
 
 const adminNavItems = [
+  { href: '/team', label: 'Team', icon: '👥' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
 ]
 
@@ -59,7 +60,7 @@ export default function Sidebar({ user }: { user: User | null }) {
         {user?.role === 'admin' && (
           <div className="mt-6 pt-4 border-t border-white/10 space-y-0.5">
             {adminNavItems.map(item => {
-              const isActive = pathname === item.href
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
               return (
                 <Link
                   key={item.href}
