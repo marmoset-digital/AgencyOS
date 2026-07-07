@@ -86,8 +86,8 @@ export default async function ProjectDetailPage({
     .from('project_members')
     .select('user:user_id ( id, full_name, role )')
     .eq('project_id', id)
-  const members = ((memberRows ?? [])
-    .map(r => (r as { user: Person | null }).user)
+  const members = (((memberRows ?? []) as unknown as { user: Person | Person[] | null }[])
+    .map(r => (Array.isArray(r.user) ? r.user[0] : r.user))
     .filter(Boolean)) as Person[]
 
   // Assignee/mention list = the project's team (members + manager). Fallback to all
