@@ -19,13 +19,15 @@ export default async function ProposalPage({ params }: { params: Promise<{ token
 
   const { data: proposal } = await adminDb
     .from('proposals')
-    .select('title, content, total_value, expires_at, status, signed_name, decision_comment, responded_at, companies:company_id ( name )')
+    .select('title, proposal_number, content, total_value, expires_at, status, signed_name, decision_comment, responded_at, companies:company_id ( name ), contact:contact_id ( first_name, last_name )')
     .eq('token', token)
     .maybeSingle()
 
   const content = (proposal?.content ?? {}) as { items?: Item[]; terms?: string }
   const items = content.items ?? []
   const company = one(proposal?.companies as { name: string | null } | { name: string | null }[] | null)
+  const contact = one(proposal?.contact as { first_name: string | null; last_name: string | null } | { first_name: string | null; last_name: string | null }[] | null)
+  const contactName = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(' ') : null
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center px-4 py-12">
@@ -41,8 +43,17 @@ export default async function ProposalPage({ params }: { params: Promise<{ token
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-200 p-8">
-            <h1 className="text-xl font-bold text-gray-900">{proposal.title}</h1>
-            {company?.name && <p className="text-sm text-gray-500 mt-1">Prepared for {company.name}</p>}
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-xl font-bold text-gray-900">{proposal.title}</h1>
+              {proposal.proposal_number && (
+                <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-1 rounded-full shrink-0">{proposal.proposal_number}</span>
+              )}
+            </div>
+            {company?.name && (
+              <p className="text-sm text-gray-500 mt-1">
+                Prepared for {company.name}{contactName ? ` · Attn: ${contactName}` : ''}
+              </p>
+            )}
             {proposal.expires_at && <p className="text-xs text-gray-400 mt-1">Valid until {fmt(proposal.expires_at)}</p>}
 
             {/* Line items */}

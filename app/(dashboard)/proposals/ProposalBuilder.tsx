@@ -13,11 +13,14 @@ export interface BuilderService {
   monthly_fee: number | null
   hourly_rate: number | null
 }
+export interface BuilderContact { id: string; first_name: string | null; last_name: string | null; is_primary?: boolean | null }
 export interface BuilderProposal {
   id: string
   title: string
   content: { items?: ProposalItem[]; terms?: string } | null
   expires_at: string | null
+  contact_id: string | null
+  proposal_number: string | null
 }
 
 const money = (n: number) => `$${(Number.isFinite(n) ? n : 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -29,18 +32,23 @@ function servicePrice(s: BuilderService): number {
   if (s.pricing_type === 'hourly') return Number(s.hourly_rate) || 0
   return 0
 }
+function contactName(c: BuilderContact) {
+  return [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unnamed contact'
+}
 
 export default function ProposalBuilder({
-  companyId, companyName, services, proposal,
+  companyId, companyName, services, contacts, proposal,
 }: {
   companyId: string
   companyName: string
   services: BuilderService[]
+  contacts: BuilderContact[]
   proposal?: BuilderProposal
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [title, setTitle] = useState(proposal?.title ?? '')
+  const [contactId, setContactId] = useState(proposal?.contact_id ?? '')
   const [items, setItems] = useState<ProposalItem[]>(proposal?.content?.items ?? [])
   const [terms, setTerms] = useState(proposal?.content?.terms ?? '')
   const [expiresAt, setExpiresAt] = useState(proposal?.expires_at ? proposal.expires_at.slice(0, 10) : '')
@@ -69,7 +77,7 @@ export default function ProposalBuilder({
     setError(null)
     if (!title.trim()) { setError('Give the proposal a title.'); return }
     startTransition(async () => {
-      const res = await saveProposal({ id: proposal?.id, company_id: companyId, title, items, terms, expires_at: expiresAt || null })
+      const res = await saveProposal({ id: proposal?.id, company_id: companyId, title, items, terms, expires_at: expiresAt || null, contact_id: contactId || null })
       if (res.error) { setError(res.error); return }
       if (markSent && res.id) {
         await setProposalStatus(res.id, 'sent', companyId)
@@ -83,13 +91,27 @@ export default function ProposalBuilder({
     <div className="p-8 max-w-3xl">
       <div className="mb-6">
         <Link href={`/clients/${companyId}`} className="text-sm text-gray-400 hover:text-gray-600">← {companyName}</Link>
-        <h1 className="text-2xl font-bold text-gray-900 mt-1">{proposal ? 'Edit proposal' : 'New proposal'}</h1>
+        <div className="flex items-center gap-3 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900">{proposal ? 'Edit proposal' : 'New proposal'}</h1>
+          {proposal?.proposal_number && (
+            <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{proposal.proposal_number}</span>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Website redesign proposal" className="input w-full" />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Title</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Website redesign proposal" className="input w-full" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Proposal to (contact)</label>
+            <select value={contactId} onChange={e => setContactId(e.target.value)} className="input w-full text-sm">
+              <option value="">{contacts.length ? '— choose a contact —' : 'No contacts on this client yet'}</option>
+              {contacts.map(c => <option key={c.id} value={c.id}>{contactName(c)}{c.is_primary ? ' (primary)' : ''}</option>)}
+            </select>
+          </div>
         </div>
 
         {/* Line items */}

@@ -22,6 +22,7 @@ export async function saveProposal(input: {
   items: ProposalItem[]
   terms: string
   expires_at: string | null
+  contact_id?: string | null
 }): Promise<Result> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,11 +37,12 @@ export async function saveProposal(input: {
     .filter(i => i.description || i.amount)
   const total = items.reduce((sum, i) => sum + (Number.isFinite(i.amount) ? i.amount : 0), 0)
   const content = { items, terms: input.terms?.trim() || '' }
+  const contact_id = input.contact_id || null
 
   if (input.id) {
     const { error } = await supabase
       .from('proposals')
-      .update({ title, content, total_value: total, expires_at: input.expires_at || null })
+      .update({ title, content, total_value: total, expires_at: input.expires_at || null, contact_id })
       .eq('id', input.id)
     if (error) return { error: error.message }
     revalidatePath(`/proposals/${input.id}`)
@@ -56,6 +58,7 @@ export async function saveProposal(input: {
       content,
       total_value: total,
       expires_at: input.expires_at || null,
+      contact_id,
       status: 'draft',
       token: randomBytes(24).toString('base64url'),
       created_by: user.id,

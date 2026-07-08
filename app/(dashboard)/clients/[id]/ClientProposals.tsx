@@ -18,6 +18,7 @@ export interface ClientProposal {
   signed_name: string | null
   decision_comment: string | null
   responded_at: string | null
+  proposal_number: string | null
 }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -70,7 +71,7 @@ export default function ClientProposals({ companyId, proposals }: { companyId: s
                   <div className="flex-1 min-w-0">
                     <Link href={`/proposals/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-[#254DA5] truncate">{p.title}</Link>
                     <div className="text-xs text-gray-400 mt-0.5">
-                      {money(p.total_value)}
+                      {p.proposal_number ? `${p.proposal_number} · ` : ''}{money(p.total_value)}
                       {p.expires_at ? ` · valid to ${new Date(p.expires_at).toLocaleDateString('en-AU')}` : ''}
                       {(p.status === 'accepted' || p.status === 'changes_requested') && p.responded_at
                         ? ` · ${p.signed_name ?? 'Client'} on ${new Date(p.responded_at).toLocaleDateString('en-AU')}` : ''}

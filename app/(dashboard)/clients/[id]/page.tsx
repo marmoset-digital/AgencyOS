@@ -25,7 +25,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       supabase.from('support_tickets').select('id, subject, status, priority, created_at').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('resource_links').select('id, label, url').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
       supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
-      supabase.from('proposals').select('id, title, status, total_value, expires_at, created_at, token, project_id, signed_name, decision_comment, responded_at').eq('company_id', id).order('created_at', { ascending: false }),
+      supabase.from('proposals').select('id, title, status, total_value, expires_at, created_at, token, project_id, signed_name, decision_comment, responded_at, proposal_number').eq('company_id', id).order('created_at', { ascending: false }),
     ])
 
   if (!company) notFound()
