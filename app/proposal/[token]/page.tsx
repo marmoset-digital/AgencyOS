@@ -1,17 +1,15 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { normaliseContent, computeTotals, summaryText, money, lineAmount, CYCLES } from '@/lib/proposalPricing'
 import ProposalDecisionForm from './ProposalDecisionForm'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Proposal — Marmoset' }
 
-interface Item { description?: string; pricing_type?: string; amount?: number }
-
-const money = (n: number) => `$${(Number.isFinite(n) ? n : 0).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const typeTag: Record<string, string> = { fixed: '', subscription: '/mo', hourly: '/hr', custom: '' }
 function fmt(d: string | null) {
   return d ? new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : ''
 }
 function one<T>(v: T | T[] | null | undefined): T | null { return Array.isArray(v) ? (v[0] ?? null) : (v ?? null) }
+const cycleSuffix = (c: string) => CYCLES.find(x => x.value === c)?.suffix ?? ''
 
 export default async function ProposalPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -19,13 +17,15 @@ export default async function ProposalPage({ params }: { params: Promise<{ token
 
   const { data: proposal } = await adminDb
     .from('proposals')
-    .select('title, content, total_value, expires_at, status, signed_name, decision_comment, responded_at, companies:company_id ( name )')
+    .select('title, proposal_number, content, expires_at, status, signed_name, decision_comment, responded_at, companies:company_id ( name ), contact:contact_id ( first_name, last_name )')
     .eq('token', token)
     .maybeSingle()
 
-  const content = (proposal?.content ?? {}) as { items?: Item[]; terms?: string }
-  const items = content.items ?? []
+  const content = normaliseContent(proposal?.content)
+  const totals = computeTotals(content)
   const company = one(proposal?.companies as { name: string | null } | { name: string | null }[] | null)
+  const contact = one(proposal?.contact as { first_name: string | null; last_name: string | null } | { first_name: string | null; last_name: string | null }[] | null)
+  const contactName = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(' ') : null
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center px-4 py-12">
@@ -41,29 +41,45 @@ export default async function ProposalPage({ params }: { params: Promise<{ token
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-200 p-8">
-            <h1 className="text-xl font-bold text-gray-900">{proposal.title}</h1>
-            {company?.name && <p className="text-sm text-gray-500 mt-1">Prepared for {company.name}</p>}
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-xl font-bold text-gray-900">{proposal.title}</h1>
+              {proposal.proposal_number && (
+                <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-1 rounded-full shrink-0">{proposal.proposal_number}</span>
+              )}
+            </div>
+            {company?.name && (
+              <p className="text-sm text-gray-500 mt-1">Prepared for {company.name}{contactName ? ` · Attn: ${contactName}` : ''}</p>
+            )}
             {proposal.expires_at && <p className="text-xs text-gray-400 mt-1">Valid until {fmt(proposal.expires_at)}</p>}
 
-            {/* Line items */}
+            {/* Offerings */}
             <div className="mt-6 border-t border-gray-100 pt-4">
-              {items.length === 0 ? (
+              {content.lines.length === 0 ? (
                 <p className="text-sm text-gray-400">No line items.</p>
               ) : (
                 <div className="divide-y divide-gray-50">
-                  {items.map((it, i) => (
+                  {content.lines.map((l, i) => (
                     <div key={i} className="flex items-baseline justify-between py-2 gap-4">
-                      <span className="text-sm text-gray-800">{it.description || '—'}</span>
+                      <span className="text-sm text-gray-800">
+                        {l.description || '—'}
+                        {l.quantity > 1 ? <span className="text-gray-400"> × {l.quantity}</span> : null}
+                      </span>
                       <span className="text-sm text-gray-900 whitespace-nowrap">
-                        {money(Number(it.amount) || 0)}<span className="text-gray-400">{typeTag[it.pricing_type ?? 'custom'] ?? ''}</span>
+                        {money(lineAmount(l), content.currency)}<span className="text-gray-400">{cycleSuffix(l.billing_cycle)}</span>
                       </span>
                     </div>
                   ))}
                 </div>
               )}
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                <span className="text-sm font-semibold text-gray-700">Total</span>
-                <span className="text-lg font-bold text-gray-900">{money(Number(proposal.total_value) || 0)}</span>
+
+              {/* Totals */}
+              <div className="mt-3 pt-3 border-t border-gray-100 space-y-1 text-sm">
+                {totals.once > 0 && <div className="flex justify-between text-gray-600"><span>One-off</span><span>{money(totals.once, content.currency)}</span></div>}
+                {totals.monthly > 0 && <div className="flex justify-between text-gray-600"><span>Monthly</span><span>{money(totals.monthly, content.currency)}/month</span></div>}
+                {totals.quarterly > 0 && <div className="flex justify-between text-gray-600"><span>Quarterly</span><span>{money(totals.quarterly, content.currency)}/quarter</span></div>}
+                {totals.annually > 0 && <div className="flex justify-between text-gray-600"><span>Annually</span><span>{money(totals.annually, content.currency)}/year</span></div>}
+                {totals.tax > 0 && <div className="flex justify-between text-xs text-gray-400"><span>Includes tax</span><span>{money(totals.tax, content.currency)}</span></div>}
+                <div className="flex justify-between pt-1 font-semibold text-gray-900"><span>Total</span><span>{summaryText(totals)}</span></div>
               </div>
             </div>
 

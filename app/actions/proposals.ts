@@ -2,13 +2,8 @@
 
 import { randomBytes } from 'crypto'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { normaliseContent, computeTotals, headlineValue, type ProposalLine, type ProposalTax } from '@/lib/proposalPricing'
 import { revalidatePath } from 'next/cache'
-
-export interface ProposalItem {
-  description: string
-  pricing_type: string // 'fixed' | 'subscription' | 'hourly' | 'custom'
-  amount: number
-}
 
 const STATUSES = ['draft', 'sent', 'accepted', 'declined', 'changes_requested', 'expired'] as const
 type Result = { ok?: true; id?: string; error?: string }
@@ -19,9 +14,11 @@ export async function saveProposal(input: {
   id?: string
   company_id: string
   title: string
-  items: ProposalItem[]
+  lines: ProposalLine[]
+  taxes: ProposalTax[]
   terms: string
   expires_at: string | null
+  contact_id?: string | null
 }): Promise<Result> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -31,16 +28,16 @@ export async function saveProposal(input: {
   if (!title) return { error: 'Give the proposal a title.' }
   if (!input.company_id) return { error: 'Missing client.' }
 
-  const items = (input.items ?? [])
-    .map(i => ({ description: String(i.description ?? '').trim(), pricing_type: i.pricing_type || 'custom', amount: Number(i.amount) || 0 }))
-    .filter(i => i.description || i.amount)
-  const total = items.reduce((sum, i) => sum + (Number.isFinite(i.amount) ? i.amount : 0), 0)
-  const content = { items, terms: input.terms?.trim() || '' }
+  // Normalise + drop empty lines, then compute the authoritative total server-side.
+  const content = normaliseContent({ lines: input.lines, taxes: input.taxes, terms: input.terms, currency: 'AUD' })
+  content.lines = content.lines.filter(l => l.description.trim() || l.unit_price)
+  const total = headlineValue(computeTotals(content))
+  const contact_id = input.contact_id || null
 
   if (input.id) {
     const { error } = await supabase
       .from('proposals')
-      .update({ title, content, total_value: total, expires_at: input.expires_at || null })
+      .update({ title, content, total_value: total, expires_at: input.expires_at || null, contact_id })
       .eq('id', input.id)
     if (error) return { error: error.message }
     revalidatePath(`/proposals/${input.id}`)
@@ -56,6 +53,7 @@ export async function saveProposal(input: {
       content,
       total_value: total,
       expires_at: input.expires_at || null,
+      contact_id,
       status: 'draft',
       token: randomBytes(24).toString('base64url'),
       created_by: user.id,
@@ -90,7 +88,6 @@ export async function deleteProposal(id: string, companyId: string): Promise<Res
   return { ok: true }
 }
 
-// Create a project from an accepted proposal (or any proposal). One project per proposal.
 export async function createProjectFromProposal(proposalId: string): Promise<Result & { projectId?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -123,7 +120,6 @@ export async function createProjectFromProposal(proposalId: string): Promise<Res
 }
 
 // --- Public (no login) — used by /proposal/[token] -----------------------------
-// Service-role, matched strictly on the secret token.
 
 export async function submitProposalDecision(
   token: string,

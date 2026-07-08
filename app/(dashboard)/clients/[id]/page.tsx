@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { DeleteContactButton } from './contacts/DeleteContactButton'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
 import ClientProposals, { type ClientProposal } from './ClientProposals'
+import { normaliseContent, computeTotals, summaryText } from '@/lib/proposalPricing'
 
 const statusColours: Record<string, string> = {
   lead: 'bg-blue-100 text-blue-700',
@@ -25,10 +26,18 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       supabase.from('support_tickets').select('id, subject, status, priority, created_at').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('resource_links').select('id, label, url').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
       supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
-      supabase.from('proposals').select('id, title, status, total_value, expires_at, created_at, token, project_id, signed_name, decision_comment, responded_at').eq('company_id', id).order('created_at', { ascending: false }),
+      supabase.from('proposals').select('id, title, status, content, expires_at, created_at, token, project_id, signed_name, decision_comment, responded_at, proposal_number').eq('company_id', id).order('created_at', { ascending: false }),
     ])
 
   if (!company) notFound()
+
+  const proposalsWithSummary: ClientProposal[] = (proposals ?? []).map((p: any) => ({
+    id: p.id, title: p.title, status: p.status,
+    summary: summaryText(computeTotals(normaliseContent(p.content))),
+    expires_at: p.expires_at, created_at: p.created_at, token: p.token, project_id: p.project_id,
+    signed_name: p.signed_name, decision_comment: p.decision_comment, responded_at: p.responded_at,
+    proposal_number: p.proposal_number,
+  }))
 
   const stageLabels: Record<string, string> = {
     quote_sent: 'Quote Sent', proposal_accepted: 'Proposal Accepted', onboarding: 'Onboarding',
@@ -188,7 +197,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </div>
 
           {/* Proposals */}
-          <ClientProposals companyId={id} proposals={(proposals ?? []) as ClientProposal[]} />
+          <ClientProposals companyId={id} proposals={proposalsWithSummary} />
 
           {/* Invoices */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
