@@ -1,0 +1,81 @@
+'use client'
+
+import { useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { setProposalStatus, deleteProposal } from '@/app/actions/proposals'
+
+export interface ClientProposal {
+  id: string
+  title: string
+  status: string
+  total_value: number | null
+  expires_at: string | null
+  created_at: string | null
+}
+
+const STATUS: Record<string, { label: string; cls: string }> = {
+  draft: { label: 'Draft', cls: 'bg-gray-100 text-gray-600' },
+  sent: { label: 'Sent', cls: 'bg-amber-100 text-amber-700' },
+  accepted: { label: 'Accepted', cls: 'bg-green-100 text-green-700' },
+  declined: { label: 'Declined', cls: 'bg-red-100 text-red-700' },
+  expired: { label: 'Expired', cls: 'bg-gray-100 text-gray-500' },
+}
+
+const money = (n: number | null) => (n != null ? `$${Number(n).toLocaleString('en-AU')}` : '—')
+
+export default function ClientProposals({ companyId, proposals }: { companyId: string; proposals: ClientProposal[] }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-gray-900">Proposals</h2>
+        <Link href={`/proposals/new?company_id=${companyId}`} className="text-xs text-[#254DA5] hover:underline font-medium">+ New Proposal</Link>
+      </div>
+
+      {proposals.length === 0 ? (
+        <p className="text-sm text-gray-400 py-2">No proposals yet — <Link href={`/proposals/new?company_id=${companyId}`} className="text-[#254DA5] hover:underline">create one</Link></p>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {proposals.map(p => {
+            const s = STATUS[p.status] ?? STATUS.draft
+            return (
+              <div key={p.id} className="py-3 first:pt-0 last:pb-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <Link href={`/proposals/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-[#254DA5] truncate">{p.title}</Link>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {money(p.total_value)}{p.expires_at ? ` · valid to ${new Date(p.expires_at).toLocaleDateString('en-AU')}` : ''}
+                    </div>
+                  </div>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 ${s.cls}`}>{s.label}</span>
+                </div>
+                <div className="flex items-center gap-3 mt-2">
+                  <Link href={`/proposals/${p.id}`} className="text-xs text-gray-500 hover:text-gray-800">Edit</Link>
+                  {p.status === 'draft' && (
+                    <button
+                      onClick={() => startTransition(async () => { await setProposalStatus(p.id, 'sent', companyId); router.refresh() })}
+                      disabled={isPending}
+                      className="text-xs text-gray-500 hover:text-gray-800 disabled:opacity-50"
+                    >
+                      Mark sent
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { if (confirm('Delete this proposal?')) startTransition(async () => { await deleteProposal(p.id, companyId); router.refresh() }) }}
+                    disabled={isPending}
+                    className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}

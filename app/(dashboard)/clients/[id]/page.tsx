@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { DeleteContactButton } from './contacts/DeleteContactButton'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
+import ClientProposals, { type ClientProposal } from './ClientProposals'
 
 const statusColours: Record<string, string> = {
   lead: 'bg-blue-100 text-blue-700',
@@ -15,7 +16,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: company }, { data: contacts }, { data: projects }, { data: invoices }, { data: tickets }, { data: links }, { data: fields }] =
+  const [{ data: company }, { data: contacts }, { data: projects }, { data: invoices }, { data: tickets }, { data: links }, { data: fields }, { data: proposals }] =
     await Promise.all([
       supabase.from('companies').select('*').eq('id', id).single(),
       supabase.from('contacts').select('*').eq('company_id', id).order('is_primary', { ascending: false }),
@@ -24,6 +25,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       supabase.from('support_tickets').select('id, subject, status, priority, created_at').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('resource_links').select('id, label, url').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
       supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
+      supabase.from('proposals').select('id, title, status, total_value, expires_at, created_at').eq('company_id', id).order('created_at', { ascending: false }),
     ])
 
   if (!company) notFound()
@@ -73,7 +75,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               {company.website && (
                 <div>
                   <dt className="text-gray-500 text-xs mb-0.5">Website</dt>
-                  <dd><a href={company.website} target="_blank" rel="noopener noreferrer" className="text-[#E8611A] hover:underline">{company.website.replace(/^https?:\/\//, '')}</a></dd>
+                  <dd><a href={company.website} target="_blank" rel="noopener noreferrer" className="text-[#254DA5] hover:underline">{company.website.replace(/^https?:\/\//, '')}</a></dd>
                 </div>
               )}
               {company.abn_acn && (
@@ -139,7 +141,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Contacts</h2>
-              <Link href={`/clients/${id}/contacts/new`} className="text-xs text-[#E8611A] hover:underline font-medium">+ Add Contact</Link>
+              <Link href={`/clients/${id}/contacts/new`} className="text-xs text-[#254DA5] hover:underline font-medium">+ Add Contact</Link>
             </div>
             {contacts && contacts.length > 0 ? (
               <div className="divide-y divide-gray-50">
@@ -161,7 +163,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 py-2">No contacts yet — <Link href={`/clients/${id}/contacts/new`} className="text-[#E8611A] hover:underline">add one</Link></p>
+              <p className="text-sm text-gray-400 py-2">No contacts yet — <Link href={`/clients/${id}/contacts/new`} className="text-[#254DA5] hover:underline">add one</Link></p>
             )}
           </div>
 
@@ -169,13 +171,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Projects</h2>
-              <Link href={`/projects/new?company_id=${id}`} className="text-xs text-[#E8611A] hover:underline font-medium">+ New Project</Link>
+              <Link href={`/projects/new?company_id=${id}`} className="text-xs text-[#254DA5] hover:underline font-medium">+ New Project</Link>
             </div>
             {projects && projects.length > 0 ? (
               <div className="space-y-2">
                 {projects.map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <Link href={`/projects/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A]">{p.name}</Link>
+                    <Link href={`/projects/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-[#254DA5]">{p.name}</Link>
                     <span className="text-xs text-gray-500 capitalize">{stageLabels[p.stage] ?? p.stage}</span>
                   </div>
                 ))}
@@ -185,11 +187,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
 
+          {/* Proposals */}
+          <ClientProposals companyId={id} proposals={(proposals ?? []) as ClientProposal[]} />
+
           {/* Invoices */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Invoices</h2>
-              <Link href="/invoices" className="text-xs text-[#E8611A] hover:underline font-medium">View all</Link>
+              <Link href="/invoices" className="text-xs text-[#254DA5] hover:underline font-medium">View all</Link>
             </div>
             {invoices && invoices.length > 0 ? (
               <div className="space-y-2">
@@ -215,13 +220,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Support Tickets</h2>
-              <Link href="/tickets" className="text-xs text-[#E8611A] hover:underline font-medium">View all</Link>
+              <Link href="/tickets" className="text-xs text-[#254DA5] hover:underline font-medium">View all</Link>
             </div>
             {tickets && tickets.length > 0 ? (
               <div className="space-y-2">
                 {tickets.map((t: any) => (
                   <div key={t.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <Link href={`/tickets/${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A]">{t.subject}</Link>
+                    <Link href={`/tickets/${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#254DA5]">{t.subject}</Link>
                     <span className="text-xs text-gray-500 capitalize">{t.status.replace('_', ' ')}</span>
                   </div>
                 ))}
