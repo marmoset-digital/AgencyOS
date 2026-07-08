@@ -28,10 +28,10 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes that don't require auth.
-  // NOTE: '/approve/' is the client-facing approval page (/approve/[token]) — it must be
-  // reachable without logging in. The trailing slash keeps the internal '/approvals'
-  // roll-up page protected (it must NOT be public).
-  const publicRoutes = ['/login', '/approve/']
+  // '/approve/' and '/proposal/' are the client-facing token pages — they must be reachable
+  // without logging in. The trailing slashes keep the internal '/approvals' and '/proposals'
+  // pages protected.
+  const publicRoutes = ['/login', '/approve/', '/proposal/']
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
 
   if (!user && !isPublicRoute) {

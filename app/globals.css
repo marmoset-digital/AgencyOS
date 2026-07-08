@@ -32,21 +32,25 @@ body {
   }
 }
 
-.input {
-  width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  color: #111827;
-  background: #ffffff;
-  outline: none;
-  transition: box-shadow 0.15s;
-}
+/* In @layer components so Tailwind width utilities (w-40, w-32, …) can override
+   the default full width when a field wants a specific size. */
+@layer components {
+  .input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    color: #111827;
+    background: #ffffff;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
 
-.input:focus {
-  box-shadow: 0 0 0 2px #254DA540;
-  border-color: #254DA5;
+  .input:focus {
+    box-shadow: 0 0 0 2px #254DA540;
+    border-color: #254DA5;
+  }
 }
 
 /* ---------------------------------------------------------------------------
