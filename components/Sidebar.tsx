@@ -30,7 +30,7 @@ export default function Sidebar({ user }: { user: User | null }) {
     <aside className="w-60 bg-[#1A1A1A] flex flex-col h-screen flex-shrink-0">
       {/* Brand */}
       <div className="px-6 py-5 border-b border-white/10">
-        <div className="text-[#E8611A] font-bold text-xs tracking-widest uppercase mb-0.5">
+        <div className="text-[#254DA5] font-bold text-xs tracking-widest uppercase mb-0.5">
           Marmoset Digital
         </div>
         <div className="text-white font-bold text-lg leading-tight">Agency OS</div>
@@ -47,8 +47,8 @@ export default function Sidebar({ user }: { user: User | null }) {
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   isActive
-                    ? 'bg-[#E8611A] text-white font-medium'
-                    : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    ? 'bg-[#254DA5] text-white font-medium'
+                    : 'text-white hover:bg-white/10'
                 }`}
               >
                 <span className="text-base w-5 text-center">{item.icon}</span>
@@ -68,8 +68,8 @@ export default function Sidebar({ user }: { user: User | null }) {
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                     isActive
-                      ? 'bg-[#E8611A] text-white font-medium'
-                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      ? 'bg-[#254DA5] text-white font-medium'
+                      : 'text-white hover:bg-white/10'
                   }`}
                 >
                   <span className="text-base w-5 text-center">{item.icon}</span>
@@ -84,18 +84,18 @@ export default function Sidebar({ user }: { user: User | null }) {
       {/* User profile */}
       <div className="px-4 py-4 border-t border-white/10">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-[#E8611A] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-[#254DA5] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {user?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2) ?? 'U'}
           </div>
           <div className="min-w-0">
             <div className="text-white text-sm font-medium truncate">{user?.full_name ?? 'User'}</div>
-            <div className="text-gray-500 text-xs capitalize">{user?.role?.replace('_', ' ') ?? ''}</div>
+            <div className="text-gray-400 text-xs capitalize">{user?.role?.replace('_', ' ') ?? ''}</div>
           </div>
         </div>
         <form action={signOut}>
           <button
             type="submit"
-            className="w-full text-left text-gray-500 hover:text-white text-xs px-2 py-1.5 rounded hover:bg-white/10 transition"
+            className="w-full text-left text-gray-400 hover:text-white text-xs px-2 py-1.5 rounded hover:bg-white/10 transition"
           >
             Sign out
           </button>

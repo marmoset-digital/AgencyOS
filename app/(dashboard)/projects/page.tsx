@@ -3,14 +3,14 @@ import Link from 'next/link'
 import { PROJECT_STAGES } from '@/types'
 
 const stageColours: Record<string, string> = {
-  quote_sent:          'bg-purple-100 text-purple-700',
-  proposal_accepted:   'bg-blue-100 text-blue-700',
-  onboarding:          'bg-yellow-100 text-yellow-700',
-  active:              'bg-green-100 text-green-700',
-  awaiting_feedback:   'bg-orange-100 text-orange-700',
-  paused:              'bg-gray-100 text-gray-600',
-  complete:            'bg-teal-100 text-teal-700',
-  invoiced_closed:     'bg-gray-100 text-gray-500',
+  quote_sent: 'bg-purple-100 text-purple-700',
+  proposal_accepted: 'bg-blue-100 text-blue-700',
+  onboarding: 'bg-yellow-100 text-yellow-700',
+  active: 'bg-green-100 text-green-700',
+  awaiting_feedback: 'bg-orange-100 text-orange-700',
+  paused: 'bg-gray-100 text-gray-600',
+  complete: 'bg-teal-100 text-teal-700',
+  invoiced_closed: 'bg-gray-100 text-gray-500',
 }
 
 const stageLabels: Record<string, string> = Object.fromEntries(
@@ -59,7 +59,7 @@ export default async function ProjectsPage({
         </div>
         <Link
           href="/projects/new"
-          className="bg-[#E8611A] hover:bg-[#d45516] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+          className="bg-[#254DA5] hover:bg-[#1E3D84] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
         >
           + New Project
         </Link>
@@ -72,7 +72,7 @@ export default async function ProjectsPage({
             name="q"
             defaultValue={q}
             placeholder="Search projects…"
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#E8611A] w-56"
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#254DA5] w-56"
           />
           {stage && <input type="hidden" name="stage" value={stage} />}
           {type && <input type="hidden" name="type" value={type} />}
@@ -101,7 +101,7 @@ export default async function ProjectsPage({
           <Link
             href={`/projects${type ? `?type=${type}` : ''}${q ? `${type ? '&' : '?'}q=${q}` : ''}`}
             className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
-              !stage ? 'bg-[#E8611A] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              !stage ? 'bg-[#254DA5] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             All Stages
@@ -112,7 +112,7 @@ export default async function ProjectsPage({
               href={`/projects?stage=${s.value}${type ? `&type=${type}` : ''}${q ? `&q=${q}` : ''}`}
               className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
                 stage === s.value
-                  ? 'bg-[#E8611A] text-white'
+                  ? 'bg-[#254DA5] text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -143,14 +143,14 @@ export default async function ProjectsPage({
               {projects.map((project: any) => (
                 <tr key={project.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                   <td className="px-5 py-4">
-                    <div className="font-medium text-gray-900">{project.name}</div>
+                    <Link href={`/projects/${project.id}`} className="font-medium text-gray-900 hover:text-[#254DA5]">{project.name}</Link>
                     {project.description && (
                       <div className="text-xs text-gray-400 mt-0.5 max-w-xs truncate">{project.description}</div>
                     )}
                   </td>
                   <td className="px-5 py-4">
                     {project.companies ? (
-                      <Link href={`/clients/${project.companies.id}`} className="text-[#E8611A] hover:underline text-sm">
+                      <Link href={`/clients/${project.companies.id}`} className="text-[#254DA5] hover:underline text-sm">
                         {project.companies.name}
                       </Link>
                     ) : <span className="text-gray-400">—</span>}
@@ -174,7 +174,7 @@ export default async function ProjectsPage({
                     ) : <span className="text-gray-400">—</span>}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <Link href={`/projects/${project.id}`} className="text-[#E8611A] hover:underline text-xs font-medium">
+                    <Link href={`/projects/${project.id}`} className="text-[#254DA5] hover:underline text-xs font-medium">
                       Open →
                     </Link>
                   </td>
@@ -185,7 +185,7 @@ export default async function ProjectsPage({
         ) : (
           <div className="py-16 text-center">
             <p className="text-gray-400 mb-4">No projects yet</p>
-            <Link href="/projects/new" className="text-[#E8611A] hover:underline text-sm font-medium">
+            <Link href="/projects/new" className="text-[#254DA5] hover:underline text-sm font-medium">
               Create your first project →
             </Link>
           </div>
