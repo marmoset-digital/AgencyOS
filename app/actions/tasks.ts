@@ -15,6 +15,7 @@ export async function editTask(taskId: string, projectId: string, formData: Form
     priority: (formData.get('priority') as string) || 'medium',
     status: (formData.get('status') as string) || 'todo',
     time_estimate: formData.get('time_estimate') ? parseInt(formData.get('time_estimate') as string) : null,
+    requires_approval: formData.get('requires_approval') === 'on',
   }
 
   if (!payload.title) return { error: 'Task title is required' }

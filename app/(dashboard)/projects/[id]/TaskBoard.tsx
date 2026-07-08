@@ -5,21 +5,22 @@ import { createTask, updateTaskStatus, deleteTask } from '@/app/actions/projects
 import { startTimer, stopTimer, logTime } from '@/app/actions/time'
 import { editTask, addSubtask, toggleSubtask, deleteSubtask } from '@/app/actions/tasks'
 import { addComment, deleteComment } from '@/app/actions/comments'
+import ApprovalRequester, { type ApprovalContact, type ApprovalItem, type ApprovalLink } from '@/components/ApprovalRequester'
 import type { Task, User } from '@/types'
 import type { ActiveTimer } from '@/types/time'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
 
 const PRIORITY_COLOURS: Record<string, string> = {
-  high:   'bg-red-100 text-red-700',
+  high: 'bg-red-100 text-red-700',
   medium: 'bg-yellow-100 text-yellow-700',
-  low:    'bg-gray-100 text-gray-600',
+  low: 'bg-gray-100 text-gray-600',
 }
 
 const STATUS_COLUMNS = [
-  { key: 'todo',        label: 'To Do',       colour: 'bg-gray-100', dot: 'bg-gray-400' },
-  { key: 'in_progress', label: 'In Progress',  colour: 'bg-blue-50',  dot: 'bg-blue-500' },
-  { key: 'done',        label: 'Done',         colour: 'bg-green-50', dot: 'bg-green-500' },
+  { key: 'todo', label: 'To Do', colour: 'bg-gray-100', dot: 'bg-gray-400' },
+  { key: 'in_progress', label: 'In Progress', colour: 'bg-blue-50', dot: 'bg-blue-500' },
+  { key: 'done', label: 'Done', colour: 'bg-green-50', dot: 'bg-green-500' },
 ] as const
 
 type TaskStatus = 'todo' | 'in_progress' | 'done'
@@ -34,6 +35,9 @@ interface Props {
   subtasksByTask: Record<string, Subtask[]>
   commentsByTask: Record<string, TaskComment[]>
   currentUserId: string
+  contacts: ApprovalContact[]
+  approvalsByTask: Record<string, ApprovalItem[]>
+  projectLinks: ApprovalLink[]
 }
 
 function fmtMins(m?: number) {
@@ -71,6 +75,16 @@ function subtaskProgress(subs?: Subtask[]) {
   if (!subs || subs.length === 0) return null
   const done = subs.filter(s => s.completed).length
   return `${done}/${subs.length}`
+}
+
+// Small approval indicator for tasks that need client sign-off.
+function approvalBadge(requires: boolean, approvals: ApprovalItem[]): { label: string; cls: string } | null {
+  const has = (s: string) => approvals.some(a => a.status === s)
+  if (has('pending')) return { label: '⏳ Awaiting client', cls: 'bg-amber-100 text-amber-700' }
+  if (has('approved')) return { label: '✓ Approved', cls: 'bg-green-100 text-green-700' }
+  if (has('changes_requested')) return { label: '✏ Changes requested', cls: 'bg-blue-100 text-blue-700' }
+  if (requires) return { label: '🔖 Approval needed', cls: 'bg-amber-50 text-amber-700 border border-amber-200' }
+  return null
 }
 
 // Per-task start/stop timer with live elapsed display.
@@ -119,18 +133,26 @@ function TaskTimer({
   )
 }
 
-// Expanded panel: subtasks + inline edit + comments.
+// Expanded panel: client approval (if required) + subtasks + inline edit + comments.
 function TaskDetailPanel({
   task,
   projectId,
+  companyId,
   users,
+  contacts,
+  approvals,
+  links,
   subtasks,
   comments,
   currentUserId,
 }: {
   task: Task
   projectId: string
+  companyId: string
   users: User[]
+  contacts: ApprovalContact[]
+  approvals: ApprovalItem[]
+  links: ApprovalLink[]
   subtasks: Subtask[]
   comments: TaskComment[]
   currentUserId: string
@@ -139,6 +161,7 @@ function TaskDetailPanel({
   const [editing, setEditing] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [mentionSel, setMentionSel] = useState<string[]>([])
+  const requiresApproval = Boolean((task as unknown as { requires_approval?: boolean }).requires_approval)
 
   const userName = (uid?: string | null) => users.find(u => u.id === uid)?.full_name ?? 'Someone'
 
@@ -157,6 +180,23 @@ function TaskDetailPanel({
 
   return (
     <div className="bg-gray-50 border-t border-gray-100 px-6 py-4 space-y-5">
+      {/* Client approval */}
+      {(requiresApproval || approvals.length > 0) && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Client approval</div>
+          <ApprovalRequester
+            scope="task"
+            projectId={projectId}
+            companyId={companyId}
+            taskId={task.id}
+            defaultTitle={task.title}
+            contacts={contacts}
+            approvals={approvals}
+            links={links}
+          />
+        </div>
+      )}
+
       {/* Subtasks */}
       <div>
         <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Subtasks</div>
@@ -319,6 +359,10 @@ function TaskDetailPanel({
             <div className="col-span-2">
               <textarea name="description" rows={2} defaultValue={task.description ?? ''} className="input resize-none text-sm" placeholder="Description (optional)" />
             </div>
+            <div className="col-span-2 flex items-center gap-2">
+              <input id={`edit_ra_${task.id}`} name="requires_approval" type="checkbox" defaultChecked={requiresApproval} className="w-4 h-4 rounded accent-[#E8611A]" />
+              <label htmlFor={`edit_ra_${task.id}`} className="text-sm text-gray-600">This task needs client approval</label>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button type="submit" disabled={isPending} className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
@@ -332,7 +376,7 @@ function TaskDetailPanel({
   )
 }
 
-export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask, commentsByTask, currentUserId }: Props) {
+export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask, commentsByTask, currentUserId, contacts, approvalsByTask, projectLinks }: Props) {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -366,6 +410,8 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
   }
 
   const commentCount = (taskId: string) => (commentsByTask[taskId]?.length ?? 0)
+  const requiresApproval = (t: Task) => Boolean((t as unknown as { requires_approval?: boolean }).requires_approval)
+  const approvalsFor = (taskId: string) => approvalsByTask[taskId] ?? []
 
   return (
     <div>
@@ -490,6 +536,10 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
             <div className="col-span-2">
               <textarea name="description" rows={2} className="input resize-none text-sm" placeholder="Description (optional)" />
             </div>
+            <div className="col-span-2 flex items-center gap-2">
+              <input id="add_requires_approval" name="requires_approval" type="checkbox" className="w-4 h-4 rounded accent-[#E8611A]" />
+              <label htmlFor="add_requires_approval" className="text-sm text-gray-600">This task needs client approval</label>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button type="submit" disabled={isPending} className="bg-[#E8611A] hover:bg-[#d45516] text-white text-xs font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
@@ -524,6 +574,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                   const prog = subtaskProgress(subs)
                   const cCount = commentCount(task.id)
                   const expanded = expandedTaskId === task.id
+                  const badge = approvalBadge(requiresApproval(task), approvalsFor(task.id))
                   return (
                     <Fragment key={task.id}>
                       <tr className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition group">
@@ -545,7 +596,10 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                               {expanded ? '▾' : '▸'}
                             </button>
                             <div>
-                              <div className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</div>
+                              <div className="flex items-center gap-2">
+                                <span className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</span>
+                                {badge && <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>}
+                              </div>
                               {task.description && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</div>}
                             </div>
                           </div>
@@ -593,7 +647,11 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                             <TaskDetailPanel
                               task={task}
                               projectId={projectId}
+                              companyId={companyId}
                               users={users}
+                              contacts={contacts}
+                              approvals={approvalsFor(task.id)}
+                              links={projectLinks}
                               subtasks={subs}
                               comments={commentsByTask[task.id] ?? []}
                               currentUserId={currentUserId}
@@ -626,12 +684,14 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                 {tasksByStatus[col.key].map(task => {
                   const prog = subtaskProgress(subtasksByTask[task.id])
                   const cCount = commentCount(task.id)
+                  const badge = approvalBadge(requiresApproval(task), approvalsFor(task.id))
                   return (
                     <div key={task.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition group">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <p className="text-sm font-medium text-gray-900 leading-snug">{task.title}</p>
                         <button onClick={() => handleDelete(task.id)} className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition flex-shrink-0">✕</button>
                       </div>
+                      {badge && <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full mb-2 ${badge.cls}`}>{badge.label}</span>}
                       {task.description && <p className="text-xs text-gray-400 mb-2 line-clamp-2">{task.description}</p>}
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[task.priority]}`}>{task.priority}</span>

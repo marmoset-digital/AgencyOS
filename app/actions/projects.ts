@@ -87,6 +87,7 @@ export async function createTask(formData: FormData) {
     priority: (formData.get('priority') as string) || 'medium',
     status: 'todo',
     time_estimate: formData.get('time_estimate') ? parseInt(formData.get('time_estimate') as string) : null,
+    requires_approval: formData.get('requires_approval') === 'on',
     created_by: user.id,
   }
 

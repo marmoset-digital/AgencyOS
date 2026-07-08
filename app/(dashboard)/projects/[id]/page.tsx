@@ -5,6 +5,7 @@ import TaskBoard from './TaskBoard'
 import RecurringTemplates from './RecurringTemplates'
 import ProjectTeam from './ProjectTeam'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
+import ApprovalRequester, { type ApprovalContact, type ApprovalItem, type ApprovalLink } from '@/components/ApprovalRequester'
 import { PROJECT_STAGES } from '@/types'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
@@ -141,6 +142,18 @@ export default async function ProjectDetailPage({
     supabase.from('resource_links').select('id, label, url').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
     supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
   ])
+
+  // Client contacts (for approval recipients) + this project's approvals
+  const [{ data: contacts }, { data: approvalRows }] = await Promise.all([
+    supabase.from('contacts').select('id, first_name, last_name, is_primary').eq('company_id', project.company_id).order('is_primary', { ascending: false }),
+    supabase.from('approvals').select('id, token, title, status, task_id, contact_id, signed_name, decision_comment, decided_at').eq('project_id', id).order('created_at', { ascending: true }),
+  ])
+  const approvalsByTask: Record<string, ApprovalItem[]> = {}
+  const projectApprovals: ApprovalItem[] = []
+  for (const a of (approvalRows ?? []) as (ApprovalItem & { task_id: string | null })[]) {
+    if (a.task_id) (approvalsByTask[a.task_id] ??= []).push(a)
+    else projectApprovals.push(a)
+  }
 
   // Fetch time logs for this project
   const { data: timeLogs } = await supabase
@@ -295,6 +308,21 @@ export default async function ProjectDetailPage({
         />
       </div>
 
+      {/* Whole-project sign-off */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+        <h2 className="font-semibold text-gray-900 mb-1">Project sign-off</h2>
+        <p className="text-sm text-gray-500 mb-3">Send the client a link to approve the whole project (e.g. a proposal). Task-level approvals live on each task.</p>
+        <ApprovalRequester
+          scope="project"
+          projectId={id}
+          companyId={project.company_id}
+          defaultTitle={`${project.name} — sign-off`}
+          contacts={(contacts ?? []) as ApprovalContact[]}
+          approvals={projectApprovals}
+          links={(links ?? []) as ApprovalLink[]}
+        />
+      </div>
+
       {/* Retainer caps */}
       {project.type === 'retainer' && (project.monthly_hours_cap || project.monthly_tasks_cap) && (
         <div className="flex items-center gap-4 mb-6 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 text-sm text-blue-700">
@@ -321,6 +349,9 @@ export default async function ProjectDetailPage({
           subtasksByTask={subtasksByTask as never}
           commentsByTask={commentsByTask as never}
           currentUserId={user?.id ?? ''}
+          contacts={(contacts ?? []) as ApprovalContact[]}
+          approvalsByTask={approvalsByTask}
+          projectLinks={(links ?? []) as ApprovalLink[]}
         />
       </div>
 

@@ -13,6 +13,7 @@ const navItems = [
   { href: '/time', label: 'Time Tracking', icon: '⏱' },
   { href: '/social', label: 'Social Media', icon: '📱' },
   { href: '/tickets', label: 'Support Tickets', icon: '🎫' },
+  { href: '/approvals', label: 'Approvals', icon: '✅' },
   { href: '/invoices', label: 'Invoices', icon: '💳' },
   { href: '/services', label: 'Services', icon: '📋' },
 ]
