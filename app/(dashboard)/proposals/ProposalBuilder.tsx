@@ -103,16 +103,19 @@ export default function ProposalBuilder({
                   value={it.description}
                   onChange={e => updateItem(i, { description: e.target.value })}
                   placeholder="Description"
-                  className="input text-sm flex-1"
+                  className="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-[#254DA5]"
                 />
-                <span className="text-xs text-gray-400 w-8 text-right">{typeLabel[it.pricing_type] ?? ''}</span>
-                <input
-                  value={it.amount}
-                  onChange={e => updateItem(i, { amount: Number(e.target.value) || 0 })}
-                  type="number" step="0.01" min="0"
-                  className="input text-sm w-32"
-                />
-                <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                <span className="text-xs text-gray-400 w-8 text-right shrink-0">{typeLabel[it.pricing_type] ?? ''}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-sm text-gray-400">$</span>
+                  <input
+                    value={it.amount}
+                    onChange={e => updateItem(i, { amount: Number(e.target.value) || 0 })}
+                    type="number" step="0.01" min="0"
+                    className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 text-right focus:outline-none focus:border-[#254DA5]"
+                  />
+                </div>
+                <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 text-xs shrink-0">✕</button>
               </div>
             ))}
           </div>
