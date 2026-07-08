@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import ProposalBuilder, { type BuilderService } from '../ProposalBuilder'
+import ProposalBuilder, { type BuilderService, type BuilderContact } from '../ProposalBuilder'
 
 export const metadata = { title: 'New proposal' }
 
@@ -16,9 +16,10 @@ export default async function NewProposalPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: company }, { data: services }] = await Promise.all([
+  const [{ data: company }, { data: services }, { data: contacts }] = await Promise.all([
     supabase.from('companies').select('id, name').eq('id', company_id).single(),
     supabase.from('services').select('id, name, pricing_type, fixed_price, monthly_fee, hourly_rate').eq('is_active', true).order('sort_order', { ascending: true }).order('name', { ascending: true }),
+    supabase.from('contacts').select('id, first_name, last_name, is_primary').eq('company_id', company_id).order('is_primary', { ascending: false }),
   ])
   if (!company) redirect('/clients')
 
@@ -27,6 +28,7 @@ export default async function NewProposalPage({
       companyId={company.id}
       companyName={company.name}
       services={(services ?? []) as BuilderService[]}
+      contacts={(contacts ?? []) as BuilderContact[]}
     />
   )
 }
