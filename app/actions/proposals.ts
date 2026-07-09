@@ -119,6 +119,45 @@ export async function createProjectFromProposal(proposalId: string): Promise<Res
   return { ok: true, projectId: project.id }
 }
 
+// --- Templates (Phase C) -------------------------------------------------------
+
+export async function saveProposalAsTemplate(input: {
+  name: string
+  description?: string
+  lines: ProposalLine[]
+  taxes: ProposalTax[]
+  terms: string
+}): Promise<Result> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+
+  const name = input.name.trim()
+  if (!name) return { error: 'Give the template a name.' }
+
+  // Reuse the proposal content shape; drop empty lines.
+  const content = normaliseContent({ lines: input.lines, taxes: input.taxes, terms: input.terms, currency: 'AUD' })
+  content.lines = content.lines.filter(l => l.description.trim() || l.unit_price)
+  if (content.lines.length === 0) return { error: 'Add at least one line before saving a template.' }
+
+  const { data, error } = await supabase
+    .from('proposal_templates')
+    .insert({ name, description: input.description?.trim() || null, content, created_by: user.id })
+    .select('id')
+    .single()
+  if (error) return { error: error.message }
+  revalidatePath('/proposals/new')
+  return { ok: true, id: data.id }
+}
+
+export async function deleteProposalTemplate(id: string): Promise<Result> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('proposal_templates').delete().eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/proposals/new')
+  return { ok: true }
+}
+
 // --- Public (no login) — used by /proposal/[token] -----------------------------
 
 export async function submitProposalDecision(

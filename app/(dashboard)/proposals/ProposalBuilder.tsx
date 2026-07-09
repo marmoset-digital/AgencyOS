@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { saveProposal, setProposalStatus } from '@/app/actions/proposals'
+import { saveProposal, setProposalStatus, saveProposalAsTemplate } from '@/app/actions/proposals'
 import {
   normaliseContent, computeTotals, summaryText, money, lineAmount, CYCLES,
   type ProposalLine, type ProposalTax, type BillingCycle,
@@ -18,6 +18,7 @@ export interface BuilderService {
   hourly_rate: number | null
 }
 export interface BuilderContact { id: string; first_name: string | null; last_name: string | null; is_primary?: boolean | null }
+export interface BuilderTemplate { id: string; name: string; description: string | null; content: unknown }
 export interface BuilderProposal {
   id: string
   title: string
@@ -47,12 +48,13 @@ function contactName(c: BuilderContact) {
 }
 
 export default function ProposalBuilder({
-  companyId, companyName, services, contacts, proposal,
+  companyId, companyName, services, contacts, templates = [], proposal,
 }: {
   companyId: string
   companyName: string
   services: BuilderService[]
   contacts: BuilderContact[]
+  templates?: BuilderTemplate[]
   proposal?: BuilderProposal
 }) {
   const router = useRouter()
@@ -66,9 +68,29 @@ export default function ProposalBuilder({
   const [terms, setTerms] = useState(initial.terms)
   const [expiresAt, setExpiresAt] = useState(proposal?.expires_at ? proposal.expires_at.slice(0, 10) : '')
   const [pick, setPick] = useState('')
+  const [templatePick, setTemplatePick] = useState('')
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateMsg, setTemplateMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const totals = computeTotals({ lines, taxes, terms, currency: 'AUD' })
+
+  function applyTemplate(id: string) {
+    const t = templates.find(x => x.id === id)
+    if (!t) return
+    const hasContent = lines.length > 0 || terms.trim()
+    if (hasContent && !confirm(`Replace the current lines, taxes and terms with the “${t.name}” template?`)) {
+      setTemplatePick('')
+      return
+    }
+    const c = normaliseContent(t.content)
+    setLines(c.lines)
+    setTaxes(c.taxes)
+    setTerms(c.terms)
+    if (!title.trim()) setTitle(t.name)
+    setTemplatePick('')
+  }
 
   function addFromCatalogue() {
     const s = services.find(x => x.id === pick)
@@ -89,6 +111,20 @@ export default function ProposalBuilder({
     setTaxes(prev => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)))
   }
   function removeTax(i: number) { setTaxes(prev => prev.filter((_, idx) => idx !== i)) }
+
+  function saveTemplate() {
+    setTemplateMsg(null)
+    const name = templateName.trim()
+    if (!name) { setTemplateMsg('Give the template a name.'); return }
+    startTransition(async () => {
+      const res = await saveProposalAsTemplate({ name, lines, taxes, terms })
+      if (res.error) { setTemplateMsg(res.error); return }
+      setTemplateMsg(`Saved “${name}” as a template.`)
+      setTemplateName('')
+      setShowSaveTemplate(false)
+      router.refresh()
+    })
+  }
 
   function save(markSent = false) {
     setError(null)
@@ -115,6 +151,18 @@ export default function ProposalBuilder({
           )}
         </div>
       </div>
+
+      {/* Start from template */}
+      {templates.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 bg-blue-50/50 border border-blue-100 rounded-xl px-4 py-3">
+          <span className="text-sm font-medium text-gray-700">Start from template</span>
+          <select value={templatePick} onChange={e => { setTemplatePick(e.target.value); applyTemplate(e.target.value) }} className="input text-sm w-72">
+            <option value="">— choose a template —</option>
+            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <span className="text-xs text-gray-400">Pre-fills the lines, taxes and terms below. Everything stays editable.</span>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         {/* Cover */}
@@ -227,15 +275,29 @@ export default function ProposalBuilder({
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <div className="flex items-center gap-2 pt-2">
+        <div className="flex flex-wrap items-center gap-2 pt-2">
           <button onClick={() => save(false)} disabled={isPending} className="bg-[#254DA5] hover:bg-[#1E3D84] text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50">
             {isPending ? 'Saving…' : 'Save draft'}
           </button>
           <button onClick={() => save(true)} disabled={isPending} className="border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50">
             Save &amp; mark sent
           </button>
+          <button onClick={() => { setShowSaveTemplate(v => !v); setTemplateMsg(null) }} disabled={isPending} className="text-sm text-gray-500 hover:text-gray-800 disabled:opacity-50">
+            Save as template
+          </button>
           <Link href={`/clients/${companyId}`} className="text-sm text-gray-500 hover:text-gray-700 ml-1">Cancel</Link>
         </div>
+
+        {/* Save-as-template panel */}
+        {showSaveTemplate && (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Template name</span>
+            <input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="e.g. Done-For-You Marketing Program" className={`w-72 ${inputCls} bg-white`} />
+            <button onClick={saveTemplate} disabled={isPending} className="bg-[#254DA5] hover:bg-[#1E3D84] text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50">Save template</button>
+            <span className="text-xs text-gray-400">Saves the current lines, taxes and terms for reuse.</span>
+          </div>
+        )}
+        {templateMsg && <p className="text-sm text-gray-600">{templateMsg}</p>}
       </div>
     </div>
   )
