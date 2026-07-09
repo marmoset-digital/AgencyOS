@@ -62,7 +62,7 @@ export default async function SupportPortalPage({ params }: { params: Promise<{ 
       content: r.content as string,
       author_type: r.author_type as string,
       created_at: (r.created_at as string | null) ?? null,
-      author_label: r.author_type === 'team' ? 'Marmoset' : (nameOf(one(r.contact as { first_name: string | null; last_name: string | null } | null)) || 'You'),
+      author_label: r.author_type === 'team' ? 'Marmoset' : (nameOf(one(r.contact as { first_name: string | null; last_name: string | null } | { first_name: string | null; last_name: string | null }[] | null)) || 'You'),
     })
     repliesByTicket.set(r.ticket_id as string, arr)
   }

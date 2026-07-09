@@ -40,15 +40,15 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     status: t.status as string,
     created_at: (t.created_at as string | null) ?? null,
     company_id: t.company_id as string,
-    company_name: one(t.companies as { name: string | null } | null)?.name ?? '—',
-    contact_name: nameOf(one(t.contact as { first_name: string | null; last_name: string | null } | null)),
+    company_name: one(t.companies as { name: string | null } | { name: string | null }[] | null)?.name ?? '—',
+    contact_name: nameOf(one(t.contact as { first_name: string | null; last_name: string | null } | { first_name: string | null; last_name: string | null }[] | null)),
     project_id: (t.project_id as string | null) ?? null,
     assignee_id: (t.assignee_id as string | null) ?? null,
   }
 
   const replyRows: DetailReply[] = (replies ?? []).map((r: Record<string, unknown>) => {
-    const a = one(r.author as { full_name: string | null; email: string | null } | null)
-    const c = one(r.contact as { first_name: string | null; last_name: string | null } | null)
+    const a = one(r.author as { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null)
+    const c = one(r.contact as { first_name: string | null; last_name: string | null } | { first_name: string | null; last_name: string | null }[] | null)
     return {
       id: r.id as string,
       content: r.content as string,

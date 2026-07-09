@@ -22,7 +22,7 @@ export default async function TicketsPage() {
   ])
 
   const rows: TicketRow[] = (tickets ?? []).map((t: Record<string, unknown>) => {
-    const a = one(t.assignee as { full_name: string | null; email: string | null } | null)
+    const a = one(t.assignee as { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null)
     return {
       id: t.id as string,
       subject: t.subject as string,
@@ -30,7 +30,7 @@ export default async function TicketsPage() {
       status: t.status as string,
       created_at: (t.created_at as string | null) ?? null,
       company_id: t.company_id as string,
-      company_name: one(t.companies as { name: string | null } | null)?.name ?? '—',
+      company_name: one(t.companies as { name: string | null } | { name: string | null }[] | null)?.name ?? '—',
       assignee_id: (t.assignee_id as string | null) ?? null,
       assignee_name: a ? (a.full_name || a.email || 'Team') : null,
     }
