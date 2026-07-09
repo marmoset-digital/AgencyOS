@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
   // '/approve/' and '/proposal/' are the client-facing token pages — they must be reachable
   // without logging in. The trailing slashes keep the internal '/approvals' and '/proposals'
   // pages protected.
-  const publicRoutes = ['/login', '/approve/', '/proposal/']
+  const publicRoutes = ['/login', '/approve/', '/proposal/', '/support/']
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
 
   if (!user && !isPublicRoute) {
