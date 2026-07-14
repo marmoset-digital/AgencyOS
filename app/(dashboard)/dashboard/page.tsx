@@ -1,3 +1,4 @@
+import ClientActivity from '@/components/ClientActivity'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
@@ -69,6 +70,11 @@ export default async function DashboardPage() {
           color={overdueTasks && overdueTasks > 0 ? 'red' : 'green'}
           icon="⏰"
         />
+      </div>
+
+      {/* Recent client activity */}
+      <div className="mb-8">
+        <ClientActivity />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
