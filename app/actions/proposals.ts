@@ -196,6 +196,11 @@ export async function submitProposalDecision(
     .eq('status', 'sent')
   if (error) return { error: error.message }
 
+    // Auto-promote a Lead -> Active Client the moment they accept (guarded to leads only).
+  if (decision === 'accepted' && proposal.company_id) {
+    await adminDb.from('companies').update({ status: 'active_client' }).eq('id', proposal.company_id).eq('status', 'lead')
+  }
+
   revalidatePath(`/proposal/${token}`)
   if (proposal.company_id) revalidatePath(`/clients/${proposal.company_id}`)
   return { ok: true }
