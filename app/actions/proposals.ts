@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { normaliseContent, computeTotals, headlineValue, type ProposalLine, type ProposalTax } from '@/lib/proposalPricing'
 import { revalidatePath } from 'next/cache'
+import { notifyTeam, proposalDecisionEmail } from '@/lib/notify'
 
 const STATUSES = ['draft', 'sent', 'accepted', 'declined', 'changes_requested', 'expired'] as const
 type Result = { ok?: true; id?: string; error?: string }
@@ -200,6 +201,9 @@ export async function submitProposalDecision(
   if (decision === 'accepted' && proposal.company_id) {
     await adminDb.from('companies').update({ status: 'active_client' }).eq('id', proposal.company_id).eq('status', 'lead')
   }
+
+    const note = proposalDecisionEmail(cleanName, decision === 'accepted', proposal.company_id ?? null, cleanComment || undefined)
+  await notifyTeam(note.subject, note.html)
 
   revalidatePath(`/proposal/${token}`)
   if (proposal.company_id) revalidatePath(`/clients/${proposal.company_id}`)
