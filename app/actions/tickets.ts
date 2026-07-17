@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { notifyTeam, newTicketEmail } from '@/lib/notify'
 
 const STATUSES = ['open', 'in_progress', 'awaiting_client', 'resolved', 'closed'] as const
 const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
@@ -132,6 +133,8 @@ export async function createTicketPublic(
     .select('id')
     .single()
   if (error) return { error: error.message }
+  const _t = newTicketEmail(subject, company.name ?? 'A client', company.id, priority)
+  await notifyTeam(_t.subject, _t.html)
   revalidatePath(`/support/${token}`)
   revalidatePath('/tickets')
   return { ok: true, id: data.id }

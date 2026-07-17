@@ -43,3 +43,30 @@ export function proposalDecisionEmail(who: string, accepted: boolean, companyId:
     `<p><a href="${APP}/clients/${companyId ?? ''}">Open the client in Agency OS →</a></p>`
   return { subject, html }
 }
+
+
+// --- Small HTML escaper for values that appear in notification emails ------------
+function esc(v: string): string {
+  return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// Convenience builder for the new-ticket email.
+export function newTicketEmail(subject: string, companyName: string, companyId: string | null, priority: string) {
+  const s = `\u{1F3AB} New support ticket \u2014 ${esc(companyName)}`
+  const html =
+    `<p><strong>${esc(companyName)}</strong> raised a support ticket.</p>` +
+    `<p><strong>Subject:</strong> ${esc(subject)}<br><strong>Priority:</strong> ${esc(priority)}</p>` +
+    `<p><a href="${APP}/clients/${companyId ?? ''}">Open the client in Agency OS \u2192</a> \u00b7 ` +
+    `<a href="${APP}/tickets">Support queue \u2192</a></p>`
+  return { subject: s, html }
+}
+
+// Convenience builder for the approval-decision email.
+export function approvalDecisionEmail(who: string, approved: boolean, title: string, companyId: string | null, comment?: string) {
+  const subject = `${approved ? '\u2705 Approval granted' : '\u270F\uFE0F Changes requested'} \u2014 ${esc(title)}`
+  const html =
+    `<p><strong>${esc(who)}</strong> ${approved ? 'approved' : 'requested changes to'} <strong>${esc(title)}</strong>.</p>` +
+    (comment ? `<blockquote style="color:#444">\u201c${esc(comment)}\u201d</blockquote>` : '') +
+    `<p><a href="${companyId ? `${APP}/clients/${companyId}` : `${APP}/approvals`}">Open in Agency OS \u2192</a></p>`
+  return { subject, html }
+}

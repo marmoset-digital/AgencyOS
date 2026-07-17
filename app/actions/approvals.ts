@@ -3,6 +3,7 @@
 import { randomBytes } from 'crypto'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { notifyTeam, approvalDecisionEmail } from '@/lib/notify'
 
 type Result = { ok?: true; error?: string; token?: string }
 
@@ -97,7 +98,7 @@ export async function submitApprovalDecision(
 
   const { data: approval } = await adminDb
     .from('approvals')
-    .select('id, status, project_id')
+    .select('id, status, project_id, title, company_id')
     .eq('token', token)
     .maybeSingle()
 
@@ -116,6 +117,8 @@ export async function submitApprovalDecision(
     .eq('status', 'pending')
   if (error) return { error: error.message }
 
+  const _a = approvalDecisionEmail(cleanName, decision === 'approved', approval.title ?? 'Approval request', approval.company_id ?? null, cleanComment || undefined)
+  await notifyTeam(_a.subject, _a.html)
   revalidatePath(`/approve/${token}`)
   if (approval.project_id) revalidatePath(`/projects/${approval.project_id}`)
   revalidatePath('/approvals')
