@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import ArchiveButton from '@/components/ArchiveButton'
 import TaskBoard from './TaskBoard'
 import RecurringTemplates from './RecurringTemplates'
 import ProjectTeam from './ProjectTeam'
@@ -216,6 +217,7 @@ export default async function ProjectDetailPage({
           >
             Edit
           </Link>
+          <ArchiveButton kind="project" id={id} archived={!!project.archived_at} name={project.name} />
         </div>
       </div>
 

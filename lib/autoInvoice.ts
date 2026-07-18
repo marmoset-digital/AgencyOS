@@ -54,6 +54,7 @@ export async function runAutoInvoice(trigger: 'cron' | 'manual' = 'cron'): Promi
     .select('id, name, xero_contact_id')
     .eq('auto_invoice', true)
     .eq('status', 'active_client')
+    .is('archived_at', null)
     .not('xero_contact_id', 'is', null)
   const companyById = new Map((companies ?? []).map(c => [c.id, c]))
   const ids = [...companyById.keys()]

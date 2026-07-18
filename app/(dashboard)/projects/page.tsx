@@ -20,10 +20,11 @@ const stageLabels: Record<string, string> = Object.fromEntries(
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ stage?: string; type?: string; q?: string }>
+  searchParams: Promise<{ stage?: string; type?: string; q?: string; archived?: string }>
 }) {
   const supabase = await createClient()
-  const { stage, type, q } = await searchParams
+  const { stage, type, q, archived } = await searchParams
+  const showArchived = archived === '1'
 
   let query = supabase
     .from('projects')
@@ -34,6 +35,8 @@ export default async function ProjectsPage({
       assigned_user:assigned_to ( id, full_name )
     `)
     .order('created_at', { ascending: false })
+
+  query = showArchived ? query.not('archived_at', 'is', null) : query.is('archived_at', null)
 
   if (stage) query = query.eq('stage', stage)
   if (type) query = query.eq('type', type)
@@ -55,7 +58,12 @@ export default async function ProjectsPage({
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-          <p className="text-gray-500 mt-1">{projects?.length ?? 0} projects</p>
+          <p className="text-gray-500 mt-1">
+            {projects?.length ?? 0} {showArchived ? 'archived' : 'projects'} ·{' '}
+            <Link href={showArchived ? '/projects' : '/projects?archived=1'} className="text-[#254DA5] hover:underline">
+              {showArchived ? '← Back to active' : 'View archive'}
+            </Link>
+          </p>
         </div>
         <Link
           href="/projects/new"

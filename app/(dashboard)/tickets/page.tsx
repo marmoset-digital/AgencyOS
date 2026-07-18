@@ -16,9 +16,9 @@ export default async function TicketsPage() {
       .from('support_tickets')
       .select('id, subject, priority, status, created_at, company_id, assignee_id, companies:company_id ( name ), assignee:assignee_id ( full_name, email )')
       .order('created_at', { ascending: false }),
-    supabase.from('companies').select('id, name, support_token').order('name', { ascending: true }),
+    supabase.from('companies').select('id, name, support_token').is('archived_at', null).order('name', { ascending: true }),
     supabase.from('users').select('id, full_name, email').eq('is_active', true).order('full_name', { ascending: true }),
-    supabase.from('projects').select('id, name, company_id').order('name', { ascending: true }),
+    supabase.from('projects').select('id, name, company_id').is('archived_at', null).order('name', { ascending: true }),
   ])
 
   const rows: TicketRow[] = (tickets ?? []).map((t: Record<string, unknown>) => {

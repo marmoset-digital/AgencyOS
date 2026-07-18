@@ -16,6 +16,7 @@ export default async function NewProjectPage({
     .from('companies')
     .select('id, name, status')
     .in('status', ['active_client', 'lead'])
+    .is('archived_at', null)
     .order('name', { ascending: true })
 
   // Fetch team members for assignment

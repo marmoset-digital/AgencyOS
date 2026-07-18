@@ -31,7 +31,7 @@ export default async function SettingsPage({
 
   const [xeroStatus, { data: companies }] = await Promise.all([
     getXeroStatus(),
-    supabase.from('companies').select('id, name, status, xero_contact_id').order('name', { ascending: true }),
+    supabase.from('companies').select('id, name, status, xero_contact_id').is('archived_at', null).order('name', { ascending: true }),
   ])
 
   return (

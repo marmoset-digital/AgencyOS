@@ -22,7 +22,7 @@ export default async function TasksPage() {
     .from('users').select('id, full_name').order('full_name', { ascending: true })
 
   const { data: projects } = await supabase
-    .from('projects').select('id, name').order('name', { ascending: true })
+    .from('projects').select('id, name').is('archived_at', null).order('name', { ascending: true })
 
   // Time logged per task
   const { data: timeLogs } = await supabase

@@ -49,7 +49,7 @@ export default async function BillingPage({
     .limit(8)
 
   // Reference data
-  const { data: companies } = await supabase.from('companies').select('id, name, status, billable_rate, xero_contact_id, auto_invoice')
+  const { data: companies } = await supabase.from('companies').select('id, name, status, billable_rate, xero_contact_id, auto_invoice').is('archived_at', null)
   const { data: users } = await supabase.from('users').select('id, cost_rate')
   const { data: projects } = await supabase.from('projects').select('id, company_id')
   const { data: charges } = await supabase

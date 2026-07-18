@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import ArchiveButton from '@/components/ArchiveButton'
 import { notFound } from 'next/navigation'
 import { DeleteContactButton } from './contacts/DeleteContactButton'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
@@ -21,7 +22,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     await Promise.all([
       supabase.from('companies').select('*').eq('id', id).single(),
       supabase.from('contacts').select('*').eq('company_id', id).order('is_primary', { ascending: false }),
-      supabase.from('projects').select('id, name, stage, type, start_date, end_date').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
+      supabase.from('projects').select('id, name, stage, type, start_date, end_date').eq('company_id', id).is('archived_at', null).order('created_at', { ascending: false }).limit(5),
       supabase.from('invoices').select('id, invoice_number, status, amount, due_date').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('support_tickets').select('id, subject, status, priority, created_at').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('resource_links').select('id, label, url').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
@@ -66,12 +67,15 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </div>
           {company.industry && <p className="text-gray-500 mt-1">{company.industry}</p>}
         </div>
-        <Link
-          href={`/clients/${id}/edit`}
-          className="text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 transition"
-        >
-          Edit
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/clients/${id}/edit`}
+            className="text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 transition"
+          >
+            Edit
+          </Link>
+          <ArchiveButton kind="client" id={id} archived={!!company.archived_at} name={company.name} />
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-6">

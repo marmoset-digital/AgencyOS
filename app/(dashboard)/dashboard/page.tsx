@@ -16,10 +16,10 @@ export default async function DashboardPage() {
     { data: recentProjects },
     { data: overdueInvoices },
   ] = await Promise.all([
-    supabase.from('projects').select('*', { count: 'exact', head: true }).in('stage', ['active', 'onboarding', 'awaiting_feedback']),
+    supabase.from('projects').select('*', { count: 'exact', head: true }).in('stage', ['active', 'onboarding', 'awaiting_feedback']).is('archived_at', null),
     supabase.from('support_tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
     supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'todo').lt('due_date', new Date().toISOString().split('T')[0]),
-    supabase.from('projects').select('id, name, stage, companies(name)').in('stage', ['active', 'onboarding', 'awaiting_feedback']).order('updated_at', { ascending: false }).limit(5),
+    supabase.from('projects').select('id, name, stage, companies(name)').in('stage', ['active', 'onboarding', 'awaiting_feedback']).is('archived_at', null).order('updated_at', { ascending: false }).limit(5),
     supabase.from('invoices').select('id, invoice_number, amount, due_date, companies(name)').eq('status', 'overdue').order('due_date', { ascending: true }).limit(5),
   ])
 

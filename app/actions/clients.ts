@@ -5,6 +5,33 @@ import { redirect } from 'next/navigation'
 import { pushCompanyToXero } from '@/app/actions/xero'
 import { revalidatePath } from 'next/cache'
 
+// ── Archive / restore ─────────────────────────────────────────────
+// We never hard-delete a client: the schema cascades to invoices, projects,
+// proposals, contacts, tasks, tickets, time logs and recurring charges, so a
+// delete would destroy financial and work history. Archiving hides the client
+// everywhere and is fully reversible. The Xero contact is never touched.
+export async function archiveCompany(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  const { error } = await supabase.from('companies').update({ archived_at: new Date().toISOString() }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/clients')
+  revalidatePath(`/clients/${id}`)
+  return { ok: true as const }
+}
+
+export async function unarchiveCompany(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  const { error } = await supabase.from('companies').update({ archived_at: null }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/clients')
+  revalidatePath(`/clients/${id}`)
+  return { ok: true as const }
+}
+
 export async function createCompany(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

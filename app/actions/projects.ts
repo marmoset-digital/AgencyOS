@@ -5,6 +5,26 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
 // ── Create Project ──────────────────────────────────────────
+// ── Archive / restore ─────────────────────────────────────────────
+// Never hard-deleted: projects cascade to tasks, time logs, members and files.
+export async function archiveProject(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('projects').update({ archived_at: new Date().toISOString() }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/projects')
+  revalidatePath(`/projects/${id}`)
+  return { ok: true as const }
+}
+
+export async function unarchiveProject(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('projects').update({ archived_at: null }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/projects')
+  revalidatePath(`/projects/${id}`)
+  return { ok: true as const }
+}
+
 export async function createProject(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -18,15 +18,18 @@ const statusLabels: Record<string, string> = {
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>
+  searchParams: Promise<{ status?: string; q?: string; archived?: string }>
 }) {
   const supabase = await createClient()
-  const { status, q } = await searchParams
+  const { status, q, archived } = await searchParams
+  const showArchived = archived === '1'
 
   let query = supabase
     .from('companies')
     .select('id, name, industry, website, status, lead_stage, created_at')
     .order('name', { ascending: true })
+
+  query = showArchived ? query.not('archived_at', 'is', null) : query.is('archived_at', null)
 
   if (status) query = query.eq('status', status)
   if (q) query = query.ilike('name', `%${q}%`)
@@ -39,7 +42,12 @@ export default async function ClientsPage({
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clients & CRM</h1>
-          <p className="text-gray-500 mt-1">{companies?.length ?? 0} companies</p>
+          <p className="text-gray-500 mt-1">
+            {companies?.length ?? 0} {showArchived ? 'archived' : 'companies'} ·{' '}
+            <Link href={showArchived ? '/clients' : '/clients?archived=1'} className="text-[#254DA5] hover:underline">
+              {showArchived ? '← Back to active' : 'View archive'}
+            </Link>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link
