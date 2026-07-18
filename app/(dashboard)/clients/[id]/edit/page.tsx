@@ -14,7 +14,7 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-8">
-        <Link href={`/clients/${id}`} className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">â Back to {company.name}</Link>
+        <Link href={`/clients/${id}`} className="text-sm text-gray-400 hover:text-gray-600 mb-2 inline-block">← Back to {company.name}</Link>
         <h1 className="text-2xl font-bold text-gray-900">Edit Client</h1>
       </div>
 
@@ -48,7 +48,7 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Lead Source</label>
             <select name="lead_source" defaultValue={company.lead_source ?? ''} className="input">
-              <option value="">â None â</option>
+              <option value="">— None —</option>
               <option value="website">Website</option>
               <option value="referral">Referral</option>
               <option value="linkedin">LinkedIn</option>
@@ -61,7 +61,7 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Lead Stage</label>
             <select name="lead_stage" defaultValue={company.lead_stage ?? ''} className="input">
-              <option value="">â None â</option>
+              <option value="">— None —</option>
               <option value="new_enquiry">New Enquiry</option>
               <option value="proposal_sent">Proposal Sent</option>
               <option value="negotiation">Negotiation</option>
@@ -84,7 +84,7 @@ export default async function EditClientPage({ params }: { params: Promise<{ id:
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">State</label>
             <select name="state" defaultValue={company.state ?? ''} className="input">
-              <option value="">â Select â</option>
+              <option value="">— Select —</option>
               <option value="VIC">VIC</option>
               <option value="NSW">NSW</option>
               <option value="QLD">QLD</option>

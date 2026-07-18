@@ -1,6 +1,7 @@
 import ClientActivity from '@/components/ClientActivity'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -57,18 +58,21 @@ export default async function DashboardPage() {
           value={activeProjects ?? 0}
           color="orange"
           icon="📁"
+          href="/projects"
         />
         <MetricCard
           label="Open Support Tickets"
           value={openTickets ?? 0}
           color="blue"
           icon="🎫"
+          href="/tickets"
         />
         <MetricCard
           label="Overdue Tasks"
           value={overdueTasks ?? 0}
           color={overdueTasks && overdueTasks > 0 ? 'red' : 'green'}
           icon="⏰"
+          href="/tasks"
         />
       </div>
 
@@ -132,11 +136,12 @@ export default async function DashboardPage() {
   )
 }
 
-function MetricCard({ label, value, color, icon }: {
+function MetricCard({ label, value, color, icon, href }: {
   label: string
   value: number
   color: 'orange' | 'blue' | 'green' | 'red'
   icon: string
+  href?: string
 }) {
   const colors = {
     orange: 'border-l-[#E8611A] bg-orange-50',
@@ -151,8 +156,8 @@ function MetricCard({ label, value, color, icon }: {
     red: 'text-red-600',
   }
 
-  return (
-    <div className={`bg-white rounded-xl border border-gray-200 border-l-4 ${colors[color]} p-6`}>
+  const card = (
+    <div className={`bg-white rounded-xl border border-gray-200 border-l-4 ${colors[color]} p-6 ${href ? 'transition hover:shadow-md hover:border-gray-300' : ''}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500 mb-1">{label}</p>
@@ -162,4 +167,6 @@ function MetricCard({ label, value, color, icon }: {
       </div>
     </div>
   )
+
+  return href ? <Link href={href} className="block">{card}</Link> : card
 }

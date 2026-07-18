@@ -3,7 +3,12 @@ import { createProject } from '@/app/actions/projects'
 import Link from 'next/link'
 import { PROJECT_STAGES } from '@/types'
 
-export default async function NewProjectPage() {
+export default async function NewProjectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ company_id?: string }>
+}) {
+  const { company_id } = await searchParams
   const supabase = await createClient()
 
   // Fetch active companies for selector
@@ -37,7 +42,7 @@ export default async function NewProjectPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Client <span className="text-red-500">*</span>
             </label>
-            <select name="company_id" required className="input">
+            <select name="company_id" required defaultValue={company_id ?? ''} className="input">
               <option value="">— Select a client —</option>
               {companies?.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
