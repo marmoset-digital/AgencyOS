@@ -27,7 +27,7 @@ const API_BASE = 'https://api.xero.com/api.xro/2.0'
 // plus offline_access for refresh. NOTE: apps created after 2 Mar 2026 only get the
 // NEW granular scopes — accounting.invoices covers both reading and writing invoices.
 export const XERO_SCOPES =
-  'openid profile email offline_access accounting.invoices accounting.contacts.read'
+  'openid profile email offline_access accounting.invoices accounting.contacts'
 
 function creds() {
   const clientId = process.env.XERO_CLIENT_ID
@@ -337,4 +337,41 @@ export function mapStatus(xeroStatus?: string, dueDate?: string | null, amountDu
     case 'DELETED': return 'voided' // no 'cancelled' in the constraint; treat deleted as voided
     default: return 'sent'
   }
+}
+
+
+// ── Write API (Phase A): create a Xero contact and return its ContactID ─────────
+export interface NewXeroContact {
+  name: string
+  email?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  phone?: string | null
+}
+
+// POST a new Contact to Xero. Xero requires Name to be unique across the org, so a
+// duplicate name throws (caller treats that as "leave unlinked"). Needs the
+// accounting.contacts (write) scope — reconnect Xero once after deploying.
+export async function createXeroContact(c: NewXeroContact): Promise<{ ContactID: string; Name: string }> {
+  const { accessToken, tenantId } = await getValidAccess()
+  const contact: Record<string, unknown> = { Name: c.name }
+  if (c.firstName) contact.FirstName = c.firstName
+  if (c.lastName) contact.LastName = c.lastName
+  if (c.email) contact.EmailAddress = c.email
+  if (c.phone) contact.Phones = [{ PhoneType: 'DEFAULT', PhoneNumber: c.phone }]
+  const res = await fetch(`${API_BASE}/Contacts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Xero-tenant-id': tenantId,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ Contacts: [contact] }),
+  })
+  if (!res.ok) throw new Error(`Xero create contact failed (${res.status}): ${await res.text()}`)
+  const data = await res.json()
+  const created = (data.Contacts as Array<{ ContactID?: string; Name?: string }>)?.[0]
+  if (!created?.ContactID) throw new Error('Xero did not return a created contact.')
+  return { ContactID: created.ContactID, Name: created.Name ?? c.name }
 }

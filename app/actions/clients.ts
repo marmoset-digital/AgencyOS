@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { pushCompanyToXero } from '@/app/actions/xero'
 import { revalidatePath } from 'next/cache'
 
 export async function createCompany(formData: FormData) {
@@ -31,6 +32,12 @@ export async function createCompany(formData: FormData) {
   const { data, error } = await supabase.from('companies').insert(payload).select('id').single()
 
   if (error) return { error: error.message }
+
+  // Phase A: mirror new *active* clients into Xero (best-effort; leads are skipped).
+  // Remove this guard to push every new record; remove the block for manual-only.
+  if (payload.status === 'active_client') {
+    await pushCompanyToXero(data.id)
+  }
 
   redirect(`/clients/${data.id}`)
 }

@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { normaliseContent, computeTotals, headlineValue, type ProposalLine, type ProposalTax } from '@/lib/proposalPricing'
 import { revalidatePath } from 'next/cache'
+import { pushCompanyToXero } from '@/app/actions/xero'
 import { notifyTeam, proposalDecisionEmail } from '@/lib/notify'
 
 const STATUSES = ['draft', 'sent', 'accepted', 'declined', 'changes_requested', 'expired'] as const
@@ -200,6 +201,9 @@ export async function submitProposalDecision(
     // Auto-promote a Lead -> Active Client the moment they accept (guarded to leads only).
   if (decision === 'accepted' && proposal.company_id) {
     await adminDb.from('companies').update({ status: 'active_client' }).eq('id', proposal.company_id).eq('status', 'lead')
+
+    // Phase A: mirror the newly-active client into Xero (best-effort, idempotent).
+    await pushCompanyToXero(proposal.company_id)
   }
 
     const note = proposalDecisionEmail(cleanName, decision === 'accepted', proposal.company_id ?? null, cleanComment || undefined)

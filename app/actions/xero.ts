@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
-  adminDb, disconnect, markSynced, fetchOutstandingInvoices, fetchContacts,
+  adminDb, createXeroContact, getStoredConnection, disconnect, markSynced, fetchOutstandingInvoices, fetchContacts,
   createDraftInvoice, mapStatus, xeroDate,
   type XeroContact, type NewInvoiceLine,
 } from '@/lib/xero'
@@ -273,4 +273,55 @@ export async function linkCompanyToXeroContact(companyId: string, xeroContactId:
   if (e) return { error: e.message }
   revalidatePath('/settings')
   revalidatePath('/invoices')
+}
+
+
+// ── Phase A: one-way push — create a Xero contact when we add a client ──────────
+// Idempotent + best-effort. Skips if Xero isn't connected or the company is already
+// linked. NEVER throws, so callers can await it without risking the client-create.
+export async function pushCompanyToXero(
+  companyId: string,
+): Promise<{ ok: true; contactId: string } | { skipped: string } | { error: string }> {
+  try {
+    const conn = await getStoredConnection()
+    if (!conn) return { skipped: 'xero_not_connected' }
+
+    const admin = adminDb()
+    const { data: company } = await admin
+      .from('companies')
+      .select('id, name, xero_contact_id')
+      .eq('id', companyId)
+      .single()
+    if (!company) return { error: 'Company not found.' }
+    if (company.xero_contact_id) return { skipped: 'already_linked' }
+    if (!company.name) return { error: 'Company has no name.' }
+
+    // Enrich from the primary contact if there is one (Xero has one primary per org).
+    const { data: contact } = await admin
+      .from('contacts')
+      .select('first_name, last_name, email, phone')
+      .eq('company_id', companyId)
+      .eq('is_primary', true)
+      .maybeSingle()
+
+    const created = await createXeroContact({
+      name: company.name,
+      email: contact?.email ?? null,
+      firstName: contact?.first_name ?? null,
+      lastName: contact?.last_name ?? null,
+      phone: contact?.phone ?? null,
+    })
+
+    const { error: e } = await admin
+      .from('companies')
+      .update({ xero_contact_id: created.ContactID })
+      .eq('id', companyId)
+    if (e) return { error: e.message }
+
+    revalidatePath(`/clients/${companyId}`)
+    revalidatePath('/settings')
+    return { ok: true, contactId: created.ContactID }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Xero contact push failed.' }
+  }
 }
