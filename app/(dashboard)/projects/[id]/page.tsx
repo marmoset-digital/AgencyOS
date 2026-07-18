@@ -6,26 +6,11 @@ import RecurringTemplates from './RecurringTemplates'
 import ProjectTeam from './ProjectTeam'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
 import ApprovalRequester, { type ApprovalContact, type ApprovalItem, type ApprovalLink } from '@/components/ApprovalRequester'
-import { PROJECT_STAGES } from '@/types'
+import StageSelect from './StageSelect'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
 import type { RecurringTemplate } from '@/types/recurring'
 import { generateDueForProject } from '@/lib/recurring'
-
-const stageColours: Record<string, string> = {
-  quote_sent: 'bg-purple-100 text-purple-700',
-  proposal_accepted: 'bg-blue-100 text-blue-700',
-  onboarding: 'bg-yellow-100 text-yellow-700',
-  active: 'bg-green-100 text-green-700',
-  awaiting_feedback: 'bg-orange-100 text-orange-700',
-  paused: 'bg-gray-100 text-gray-600',
-  complete: 'bg-teal-100 text-teal-700',
-  invoiced_closed: 'bg-gray-100 text-gray-500',
-}
-
-const stageLabels: Record<string, string> = Object.fromEntries(
-  PROJECT_STAGES.map(s => [s.value, s.label])
-)
 
 function formatMinutes(m: number) {
   if (!m) return '0m'
@@ -214,9 +199,7 @@ export default async function ProjectDetailPage({
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${stageColours[project.stage] ?? 'bg-gray-100'}`}>
-              {stageLabels[project.stage] ?? project.stage}
-            </span>
+            <StageSelect projectId={id} stage={project.stage} />
             <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 capitalize">
               {project.type === 'retainer' ? '🔁 Retainer' : '📌 One-off'}
             </span>
