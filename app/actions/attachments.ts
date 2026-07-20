@@ -26,8 +26,10 @@ const ALLOWED_TYPES = new Set([
   'application/zip', 'application/x-zip-compressed',
 ])
 
-export const MAX_UPLOAD_BYTES = MAX_BYTES
-
+// NOTE: a 'use server' file may ONLY export async functions. Do not export
+// constants from here — it builds fine but throws at runtime
+// ("A 'use server' file can only export async functions"). Shared constants
+// live in lib/attachmentsClient.ts. Type exports are fine; they're erased.
 export type Attachment = {
   id: string
   name: string
