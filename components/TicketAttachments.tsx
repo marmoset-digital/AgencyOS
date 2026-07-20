@@ -33,7 +33,7 @@ export default function TicketAttachments({
     const res = token
       ? await listTicketAttachmentsPublic(token, ticketId)
       : await listTicketAttachmentsTeam(ticketId)
-    if ('attachments' in res) setItems(res.attachments)
+    if ('attachments' in res && res.attachments) setItems(res.attachments)
     setLoading(false)
   }, [ticketId, token])
 
