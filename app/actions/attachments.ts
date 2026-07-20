@@ -58,7 +58,9 @@ function validate(file: { name: string; size: number; type: string }): string | 
   if (!file?.name) return 'Missing file name.'
   if (!file.size || file.size <= 0) return 'That file appears to be empty.'
   if (file.size > MAX_BYTES) return `That file is too large — the limit is ${Math.floor(MAX_BYTES / 1024 / 1024)}MB.`
-  if (!ALLOWED_TYPES.has(file.type)) return 'That file type isn’t supported.'
+  if (!ALLOWED_TYPES.has(file.type)) {
+    return `That file type isn’t supported (detected: ${file.type || 'unknown'}).`
+  }
   return null
 }
 
@@ -84,9 +86,9 @@ export async function createTicketUploadUrl(
 
   const path = `${company.id}/${ticketId}/${crypto.randomUUID()}-${safeName(file.name)}`
   const { data, error } = await adminDb.storage.from(BUCKET).createSignedUploadUrl(path)
-  if (error || !data) return { error: error?.message ?? 'Could not start the upload.' }
+  if (error || !data) return { error: `Storage: ${error?.message ?? 'could not start the upload.'}` }
 
-  return { ok: true as const, path: data.path, uploadToken: data.token }
+  return { ok: true as const, path, uploadToken: data.token }
 }
 
 export async function attachFileToTicket(

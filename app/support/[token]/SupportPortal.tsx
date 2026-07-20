@@ -48,7 +48,10 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
       if (res.error) { setError(res.error); return }
       if (newFiles.length > 0 && res.id) {
         const errs = await uploadFilesToTicket(token, res.id, newFiles)
-        if (errs.length > 0) setError(errs.join(' · '))
+        if (errs.length > 0) {
+          setError('Ticket created, but the attachment failed: ' + errs.join(' · '))
+          setNewFiles([]); router.refresh(); return
+        }
       }
       setSubject(''); setDescription(''); setPriority('medium'); setContactId(''); setNewFiles([]); setShowNew(false)
       router.refresh()
