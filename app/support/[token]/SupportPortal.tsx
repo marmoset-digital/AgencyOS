@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTicketPublic, addReplyPublic } from '@/app/actions/tickets'
+import TicketAttachments from '@/components/TicketAttachments'
+import { uploadFilesToTicket } from '@/lib/attachmentsClient'
 
 export interface PortalReply { id: string; content: string; author_type: string; created_at: string | null; author_label: string }
 export interface PortalTicket { id: string; subject: string; description: string | null; priority: string; status: string; created_at: string | null; replies: PortalReply[] }
@@ -36,6 +38,7 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
   const [replyContact, setReplyContact] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [replyError, setReplyError] = useState<string | null>(null)
+  const [newFiles, setNewFiles] = useState<File[]>([])
 
   function submitNew() {
     setError(null)
@@ -43,7 +46,11 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
     startTransition(async () => {
       const res = await createTicketPublic(token, { subject, description, priority, contact_id: contactId || null })
       if (res.error) { setError(res.error); return }
-      setSubject(''); setDescription(''); setPriority('medium'); setContactId(''); setShowNew(false)
+      if (newFiles.length > 0 && res.id) {
+        const errs = await uploadFilesToTicket(token, res.id, newFiles)
+        if (errs.length > 0) setError(errs.join(' · '))
+      }
+      setSubject(''); setDescription(''); setPriority('medium'); setContactId(''); setNewFiles([]); setShowNew(false)
       router.refresh()
     })
   }
@@ -81,6 +88,18 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
             <div className="mt-4 space-y-3">
               <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject — a short summary" className="input w-full" />
               <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} placeholder="Tell us what's going on, with as much detail as you can." className="input w-full text-sm" />
+              <div>
+                <label className="inline-flex items-center gap-2 text-xs text-[#254DA5] hover:underline cursor-pointer">
+                  <input type="file" multiple onChange={e => setNewFiles(Array.from(e.target.files ?? []))} className="hidden" />
+                  <span>📎 Attach files</span>
+                </label>
+                <span className="ml-2 text-xs text-gray-400">Images, PDFs, documents · up to 25MB each</span>
+                {newFiles.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {newFiles.map((f, i) => <li key={i} className="text-xs text-gray-500">📎 {f.name}</li>)}
+                  </ul>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Urgency</label>
@@ -137,6 +156,7 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
                           ))}
                         </div>
                       )}
+                      <TicketAttachments ticketId={t.id} token={token} canUpload={t.status !== 'closed'} compact />
                       {t.status !== 'closed' && (
                         <div className="space-y-2">
                           <textarea value={reply} onChange={e => setReply(e.target.value)} rows={2} placeholder="Add a reply…" className="input w-full text-sm" />

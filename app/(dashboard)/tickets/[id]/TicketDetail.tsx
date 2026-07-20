@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import TicketAttachments from '@/components/TicketAttachments'
 import { setTicketStatus, setTicketPriority, setTicketAssignee, setTicketProject, addTicketReply, deleteTicket } from '@/app/actions/tickets'
 
 export interface DetailTicket {
@@ -73,6 +74,9 @@ export default function TicketDetail({ ticket, replies, users, projects }: {
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Description</div>
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.description || <span className="text-gray-400">No description.</span>}</p>
+            <div className="mt-3">
+              <TicketAttachments ticketId={ticket.id} />
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-5">
