@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTicketPublic, addReplyPublic } from '@/app/actions/tickets'
-import TicketAttachments from '@/components/TicketAttachments'
-import { uploadFilesToTicket, ACCEPT_ATTR, ALLOWED_LABEL, MAX_UPLOAD_MB } from '@/lib/attachmentsClient'
+import { uploadFilesToTicket, ACCEPT_ATTR, ALLOWED_LABEL, MAX_UPLOAD_MB, formatBytes } from '@/lib/attachmentsClient'
+import { listTicketAttachmentsPublic, type Attachment } from '@/app/actions/attachments'
 
 export interface PortalReply { id: string; content: string; author_type: string; created_at: string | null; author_label: string }
 export interface PortalTicket { id: string; subject: string; description: string | null; priority: string; status: string; created_at: string | null; replies: PortalReply[] }
@@ -23,6 +23,24 @@ const PRIORITY_LABEL: Record<string, string> = { low: 'Low', medium: 'Medium', h
 function fmt(d: string | null) { return d ? new Date(d).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '' }
 function contactName(c: PortalContact) { return [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Unnamed' }
 
+// Attachments belonging to one message (the original request, or a single reply).
+function AttList({ items }: { items: Attachment[] }) {
+  if (items.length === 0) return null
+  return (
+    <ul className="mt-2 space-y-1">
+      {items.map(a => (
+        <li key={a.id} className="flex items-center gap-2 text-sm">
+          <span aria-hidden="true">{a.type?.startsWith('image/') ? '🖼️' : '📎'}</span>
+          {a.url
+            ? <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-[#254DA5] hover:underline break-all">{a.name}</a>
+            : <span className="text-gray-500 break-all">{a.name}</span>}
+          {a.size ? <span className="text-xs text-gray-400">{formatBytes(a.size)}</span> : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export default function SupportPortal({ token, companyName, tickets, contacts }: {
   token: string; companyName: string; tickets: PortalTicket[]; contacts: PortalContact[]
 }) {
@@ -39,6 +57,16 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
   const [error, setError] = useState<string | null>(null)
   const [replyError, setReplyError] = useState<string | null>(null)
   const [newFiles, setNewFiles] = useState<File[]>([])
+  const [replyFiles, setReplyFiles] = useState<File[]>([])
+  const [atts, setAtts] = useState<Attachment[]>([])
+
+  const loadAtts = useCallback(async (ticketId: string) => {
+    const res = await listTicketAttachmentsPublic(token, ticketId)
+    if ('attachments' in res && res.attachments) setAtts(res.attachments)
+  }, [token])
+
+  // reply_id null = attached when the ticket was raised
+  const attsFor = (replyId: string | null) => atts.filter(a => (a.replyId ?? null) === replyId)
 
   function submitNew() {
     setError(null)
@@ -59,11 +87,17 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
   }
   function sendReply(ticketId: string) {
     setReplyError(null)
-    if (!reply.trim()) { setReplyError('Write a reply first.'); return }
+    if (!reply.trim() && replyFiles.length === 0) { setReplyError('Write a reply or attach a file.'); return }
     startTransition(async () => {
-      const res = await addReplyPublic(token, ticketId, reply, replyContact || null)
+      const res = await addReplyPublic(token, ticketId, reply, replyContact || null, replyFiles.length > 0)
       if (res.error) { setReplyError(res.error); return }
-      setReply(''); setReplyContact('')
+      // Files upload against the new reply, so each one is threaded to its message.
+      if (replyFiles.length > 0 && res.id) {
+        const errs = await uploadFilesToTicket(token, ticketId, replyFiles, res.id)
+        if (errs.length > 0) setReplyError('Reply sent, but the attachment failed: ' + errs.join(' · '))
+      }
+      setReply(''); setReplyContact(''); setReplyFiles([])
+      await loadAtts(ticketId)
       router.refresh()
     })
   }
@@ -136,7 +170,7 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
               const isOpen = expanded === t.id
               return (
                 <div key={t.id} className="p-4">
-                  <button onClick={() => { setExpanded(isOpen ? null : t.id); setReply(''); setReplyError(null) }} className="w-full flex items-center gap-3 text-left">
+                  <button onClick={() => { const next = isOpen ? null : t.id; setExpanded(next); setReply(''); setReplyError(null); setReplyFiles([]); setAtts([]); if (next) void loadAtts(next) }} className="w-full flex items-center gap-3 text-left">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-900 truncate">{t.subject}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{fmt(t.created_at)}</div>
@@ -145,7 +179,8 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
                   </button>
                   {isOpen && (
                     <div className="mt-3">
-                      {t.description && <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">{t.description}</p>}
+                      {t.description && <p className="text-sm text-gray-700 whitespace-pre-wrap">{t.description}</p>}
+                      <div className="mb-3"><AttList items={attsFor(null)} /></div>
                       {t.replies.length > 0 && (
                         <div className="space-y-2 mb-3">
                           {t.replies.map(r => (
@@ -155,14 +190,26 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
                                 <span className="text-xs text-gray-400">{fmt(r.created_at)}</span>
                               </div>
                               <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.content}</p>
+                              <AttList items={attsFor(r.id)} />
                             </div>
                           ))}
                         </div>
                       )}
-                      <TicketAttachments ticketId={t.id} token={token} canUpload={t.status !== 'closed'} compact />
                       {t.status !== 'closed' && (
                         <div className="space-y-2">
                           <textarea value={reply} onChange={e => setReply(e.target.value)} rows={2} placeholder="Add a reply…" className="input w-full text-sm" />
+                          <div>
+                            <label className="inline-flex items-center gap-2 text-xs text-[#254DA5] hover:underline cursor-pointer">
+                              <input type="file" multiple accept={ACCEPT_ATTR} onChange={e => setReplyFiles(Array.from(e.target.files ?? []))} className="hidden" />
+                              <span>📎 Attach files</span>
+                            </label>
+                            <p className="text-xs text-gray-400 mt-1">{ALLOWED_LABEL} · up to {MAX_UPLOAD_MB}MB each</p>
+                            {replyFiles.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {replyFiles.map((f, i) => <li key={i} className="text-xs text-gray-500">📎 {f.name}</li>)}
+                              </ul>
+                            )}
+                          </div>
                           <div className="flex flex-wrap items-center gap-2">
                             {contacts.length > 0 && (
                               <select value={replyContact} onChange={e => setReplyContact(e.target.value)} className="input text-sm w-40">

@@ -38,6 +38,7 @@ export type Attachment = {
   type: string | null
   url: string | null
   createdAt: string
+  replyId: string | null
 }
 
 function safeName(name: string): string {
@@ -115,6 +116,7 @@ export async function attachFileToTicket(
   token: string,
   ticketId: string,
   file: { path: string; name: string; size: number; type: string },
+  replyId?: string | null,
 ) {
   const { adminDb, company } = await companyForToken(token)
   if (!company) return { error: 'This support link is not valid.' }
@@ -125,6 +127,7 @@ export async function attachFileToTicket(
   const { error } = await adminDb.from('files').insert({
     company_id: company.id,
     ticket_id: ticketId,
+    reply_id: replyId ?? null,
     name: safeName(file.name),
     storage_path: file.path,
     file_type: file.type || null,
@@ -143,7 +146,7 @@ export async function listTicketAttachmentsPublic(token: string, ticketId: strin
 
   const { data: rows, error } = await adminDb
     .from('files')
-    .select('id, name, file_size, file_type, storage_path, created_at')
+    .select('id, name, file_size, file_type, storage_path, created_at, reply_id')
     .eq('ticket_id', ticketId)
     .eq('company_id', company.id)
     .order('created_at', { ascending: true })
@@ -161,7 +164,7 @@ export async function listTicketAttachmentsTeam(ticketId: string) {
 
   const { data: rows, error } = await supabase
     .from('files')
-    .select('id, name, file_size, file_type, storage_path, created_at')
+    .select('id, name, file_size, file_type, storage_path, created_at, reply_id')
     .eq('ticket_id', ticketId)
     .order('created_at', { ascending: true })
   if (error) return { error: error.message }
@@ -179,6 +182,7 @@ type Row = {
   file_type: string | null
   storage_path: string | null
   created_at: string
+  reply_id: string | null
 }
 
 async function sign(
@@ -202,5 +206,6 @@ async function sign(
     type: r.file_type,
     url: r.storage_path ? urlByPath.get(r.storage_path) ?? null : null,
     createdAt: r.created_at,
+    replyId: r.reply_id ?? null,
   }))
 }

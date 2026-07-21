@@ -1,9 +1,28 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import TicketAttachments from '@/components/TicketAttachments'
+import { listTicketAttachmentsTeam, type Attachment } from '@/app/actions/attachments'
+import { formatBytes } from '@/lib/attachmentsClient'
+
+// Attachments belonging to one message (the original request, or a single reply).
+function AttList({ items }: { items: Attachment[] }) {
+  if (items.length === 0) return null
+  return (
+    <ul className="mt-2 space-y-1">
+      {items.map(a => (
+        <li key={a.id} className="flex items-center gap-2 text-sm">
+          <span aria-hidden="true">{a.type?.startsWith('image/') ? '🖼️' : '📎'}</span>
+          {a.url
+            ? <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-[#254DA5] hover:underline break-all">{a.name}</a>
+            : <span className="text-gray-500 break-all">{a.name}</span>}
+          {a.size ? <span className="text-xs text-gray-400">{formatBytes(a.size)}</span> : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
 import { setTicketStatus, setTicketPriority, setTicketAssignee, setTicketProject, addTicketReply, deleteTicket } from '@/app/actions/tickets'
 
 export interface DetailTicket {
@@ -37,6 +56,17 @@ export default function TicketDetail({ ticket, replies, users, projects }: {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [reply, setReply] = useState('')
+  const [atts, setAtts] = useState<Attachment[]>([])
+
+  const loadAtts = useCallback(async () => {
+    const res = await listTicketAttachmentsTeam(ticket.id)
+    if ('attachments' in res && res.attachments) setAtts(res.attachments)
+  }, [ticket.id])
+
+  useEffect(() => { void loadAtts() }, [loadAtts])
+
+  // reply_id null = attached when the ticket was raised
+  const attsFor = (replyId: string | null) => atts.filter(a => (a.replyId ?? null) === replyId)
   const [error, setError] = useState<string | null>(null)
 
   const change = (fn: () => Promise<unknown>) => startTransition(async () => { await fn(); router.refresh() })
@@ -74,9 +104,7 @@ export default function TicketDetail({ ticket, replies, users, projects }: {
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Description</div>
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.description || <span className="text-gray-400">No description.</span>}</p>
-            <div className="mt-3">
-              <TicketAttachments ticketId={ticket.id} />
-            </div>
+            <AttList items={attsFor(null)} />
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -92,6 +120,7 @@ export default function TicketDetail({ ticket, replies, users, projects }: {
                       <span className="text-xs text-gray-400">{fmt(r.created_at)}</span>
                     </div>
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">{r.content}</p>
+                    <AttList items={attsFor(r.id)} />
                   </div>
                 ))}
               </div>

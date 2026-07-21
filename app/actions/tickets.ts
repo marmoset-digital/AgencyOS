@@ -158,23 +158,27 @@ export async function addReplyPublic(
   ticketId: string,
   content: string,
   contactId?: string | null,
+  hasAttachments = false,
 ): Promise<Result> {
   const { adminDb, company } = await companyForToken(token)
   if (!company) return { error: 'This support link is not valid.' }
   const body = content.trim()
-  if (!body) return { error: 'Write a reply first.' }
+  // A file on its own is a valid reply - don't force the client to write something.
+  if (!body && !hasAttachments) return { error: 'Write a reply or attach a file.' }
 
   // Ensure the ticket belongs to this company (token scoping).
   const { data: ticket } = await adminDb.from('support_tickets').select('id, company_id').eq('id', ticketId).maybeSingle()
   if (!ticket || ticket.company_id !== company.id) return { error: 'Ticket not found.' }
 
-  const { error } = await adminDb
+  const { data: newReply, error } = await adminDb
     .from('ticket_replies')
-    .insert({ ticket_id: ticketId, author_type: 'client', author_contact_id: contactId || null, content: body })
+    .insert({ ticket_id: ticketId, author_type: 'client', author_contact_id: contactId || null, content: body || '(file attached)' })
+    .select('id')
+    .single()
   if (error) return { error: error.message }
   // Client reply reopens a resolved-but-not-closed ticket and flags it for the team.
   await adminDb.from('support_tickets').update({ status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', ticketId).in('status', ['awaiting_client'])
   revalidatePath(`/support/${token}`)
   revalidatePath(`/tickets/${ticketId}`)
-  return { ok: true }
+  return { ok: true, id: newReply.id }
 }

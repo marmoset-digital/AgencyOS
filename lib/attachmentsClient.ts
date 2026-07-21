@@ -31,6 +31,7 @@ export async function uploadFilesToTicket(
   token: string,
   ticketId: string,
   files: File[],
+  replyId?: string | null,
   onProgress?: (done: number, total: number) => void,
 ): Promise<string[]> {
   const errors: string[] = []
@@ -56,7 +57,7 @@ export async function uploadFilesToTicket(
       continue
     }
 
-    const recorded = await attachFileToTicket(token, ticketId, { path: signed.path, ...meta })
+    const recorded = await attachFileToTicket(token, ticketId, { path: signed.path, ...meta }, replyId ?? null)
     if ('error' in recorded) errors.push(`${file.name}: ${recorded.error}`)
 
     onProgress?.(i + 1, files.length)
