@@ -17,6 +17,7 @@ const DOWNLOAD_TTL = 60 * 60 // signed download URLs live 1 hour
 
 const ALLOWED_TYPES = new Set([
   'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/heic',
+  'image/svg+xml',
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
