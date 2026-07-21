@@ -14,6 +14,12 @@ import { createTicketUploadUrl, attachFileToTicket } from '@/app/actions/attachm
 export const BUCKET = 'ticket-attachments'
 export const MAX_UPLOAD_MB = 25
 
+export const ACCEPT_ATTR =
+  '.png,.jpg,.jpeg,.gif,.webp,.svg,.heic,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip'
+
+export const ALLOWED_LABEL =
+  'PNG, JPG, GIF, WEBP, SVG, HEIC · PDF, Word, Excel · TXT, CSV, ZIP'
+
 export function formatBytes(bytes: number | null): string {
   if (!bytes || bytes <= 0) return ''
   if (bytes < 1024) return `${bytes} B`
