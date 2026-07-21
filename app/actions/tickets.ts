@@ -120,10 +120,23 @@ export async function createTicketPublic(
   if (!subject) return { error: 'Give your request a subject.' }
   const priority = input.priority && PRIORITIES.includes(input.priority as (typeof PRIORITIES)[number]) ? input.priority : 'medium'
 
+  // Auto-link the ticket when the client has exactly ONE live project. None or
+  // several stays blank for triage - better than guessing wrong.
+  const LIVE_STAGES = ['quote_sent', 'proposal_accepted', 'onboarding', 'active', 'awaiting_feedback', 'paused']
+  const { data: liveProjects } = await adminDb
+    .from('projects')
+    .select('id')
+    .eq('company_id', company.id)
+    .is('archived_at', null)
+    .in('stage', LIVE_STAGES)
+    .limit(2)
+  const project_id = liveProjects?.length === 1 ? liveProjects[0].id : null
+
   const { data, error } = await adminDb
     .from('support_tickets')
     .insert({
       company_id: company.id,
+      project_id,
       subject,
       description: input.description.trim() || null,
       priority,
