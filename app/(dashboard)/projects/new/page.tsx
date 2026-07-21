@@ -25,6 +25,12 @@ export default async function NewProjectPage({
     .select('id, full_name, role')
     .order('full_name', { ascending: true })
 
+  // Reusable project templates
+  const { data: templates } = await supabase
+    .from('project_templates')
+    .select('id, name, description')
+    .order('name', { ascending: true })
+
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-8">
@@ -50,6 +56,22 @@ export default async function NewProjectPage({
               ))}
             </select>
           </div>
+
+          {/* Template */}
+          {templates && templates.length > 0 && (
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Start from a template</label>
+              <select name="template_id" defaultValue="" className="input w-full">
+                <option value="">— none —</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Creates the template&rsquo;s tasks, with due dates counted from the start date below.
+              </p>
+            </div>
+          )}
 
           {/* Project Name */}
           <div className="col-span-2">

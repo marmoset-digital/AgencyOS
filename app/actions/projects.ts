@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { applyTemplateToProject } from '@/app/actions/projectTemplates'
 
 // ── Create Project ──────────────────────────────────────────
 // ── Archive / restore ─────────────────────────────────────────────
@@ -55,6 +56,13 @@ export async function createProject(formData: FormData) {
     .single()
 
   if (error) return { error: error.message }
+
+  // Lay down the template's tasks, dated from this project's start date.
+  // Best-effort: a template problem must never cost you the project you just made.
+  const templateId = (formData.get('template_id') as string) || ''
+  if (templateId) {
+    await applyTemplateToProject(templateId, data.id, payload.company_id, payload.start_date, user.id)
+  }
 
   redirect(`/projects/${data.id}`)
 }

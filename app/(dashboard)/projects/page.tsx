@@ -65,12 +65,17 @@ export default async function ProjectsPage({
             </Link>
           </p>
         </div>
-        <Link
-          href="/projects/new"
-          className="bg-[#254DA5] hover:bg-[#1E3D84] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
-        >
-          + New Project
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/projects/templates" className="text-sm text-gray-500 hover:text-gray-900 transition">
+            Templates
+          </Link>
+          <Link
+            href="/projects/new"
+            className="bg-[#254DA5] hover:bg-[#1E3D84] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition"
+          >
+            + New Project
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
