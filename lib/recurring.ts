@@ -74,12 +74,17 @@ export async function generateDueForProject(
   supabase: SupabaseClient,
   projectId: string,
   createdBy: string | null,
+  preloaded?: RecurringTemplate[] | null,
 ): Promise<number> {
-  const { data: templates } = await supabase
-    .from('recurring_task_templates')
-    .select('*')
-    .eq('project_id', projectId)
-    .eq('active', true)
+  // The project page already loads this project's templates, so it passes them in
+  // rather than making us re-query the same table on every page view.
+  const templates = preloaded
+    ? preloaded.filter(t => t.active !== false)
+    : ((await supabase
+        .from('recurring_task_templates')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('active', true)).data as RecurringTemplate[] | null)
 
   let count = 0
   for (const t of (templates ?? []) as RecurringTemplate[]) {

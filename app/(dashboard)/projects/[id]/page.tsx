@@ -30,50 +30,58 @@ export default async function ProjectDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Fetch project with related data
-  const { data: project } = await supabase
-    .from('projects')
-    .select(`
-      *,
-      companies:company_id ( id, name, status, website ),
-      assigned_user:assigned_to ( id, full_name, role )
-    `)
-    .eq('id', id)
-    .single()
+  // ── Wave 0: mutually independent ─────────────────────────────────────────
+  const [{ data: { user } }, { data: project }, { data: templates }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from('projects')
+      .select(`
+        *,
+        companies:company_id ( id, name, status, website ),
+        assigned_user:assigned_to ( id, full_name, role )
+      `)
+      .eq('id', id)
+      .single(),
+    supabase
+      .from('recurring_task_templates')
+      .select('*')
+      .eq('project_id', id)
+      .order('created_at', { ascending: true }),
+  ])
 
   if (!project) notFound()
 
-  // Auto-generate any due recurring tasks for this project (best-effort; deduped
-  // via last_generated_at). Runs before we fetch tasks so new ones show up now.
+  // Generate due recurring tasks BEFORE reading tasks so new ones show up now.
+  // Templates are already loaded above, so this costs nothing when none are due.
   try {
-    await generateDueForProject(supabase, id, user?.id ?? null)
+    await generateDueForProject(supabase, id, user?.id ?? null, (templates ?? []) as RecurringTemplate[])
   } catch {
     // never let recurring generation break the page
   }
 
-  // Fetch tasks with assignee
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select(`
-      *,
-      assignee:assignee_id ( id, full_name )
-    `)
-    .eq('project_id', id)
-    .order('created_at', { ascending: true })
+  // ── Wave 1: everything needing only id / user / project ──────────────────
+  const [
+    { data: tasks },
+    { data: users },
+    { data: memberRows },
+    { data: links },
+    { data: fields },
+    { data: contacts },
+    { data: approvalRows },
+    { data: timeLogs },
+    { data: activeTimer },
+  ] = await Promise.all([
+    supabase.from('tasks').select(`*, assignee:assignee_id ( id, full_name )`).eq('project_id', id).order('created_at', { ascending: true }),
+    supabase.from('users').select('id, full_name, role').order('full_name', { ascending: true }),
+    supabase.from('project_members').select('user:user_id ( id, full_name, role )').eq('project_id', id),
+    supabase.from('resource_links').select('id, label, url').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
+    supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
+    supabase.from('contacts').select('id, first_name, last_name, is_primary').eq('company_id', project.company_id).order('is_primary', { ascending: false }),
+    supabase.from('approvals').select('id, token, title, status, task_id, contact_id, signed_name, decision_comment, decided_at').eq('project_id', id).order('created_at', { ascending: true }),
+    supabase.from('time_logs').select('id, task_id, duration_minutes, is_billable').eq('project_id', id),
+    supabase.from('active_timers').select('*').eq('user_id', user?.id ?? '00000000-0000-0000-0000-000000000000').maybeSingle(),
+  ])
 
-  // Fetch users for @mentions / picker
-  const { data: users } = await supabase
-    .from('users')
-    .select('id, full_name, role')
-    .order('full_name', { ascending: true })
-
-  // Fetch this project's team members
-  const { data: memberRows } = await supabase
-    .from('project_members')
-    .select('user:user_id ( id, full_name, role )')
-    .eq('project_id', id)
   const members = (((memberRows ?? []) as unknown as { user: Person | Person[] | null }[])
     .map(r => (Array.isArray(r.user) ? r.user[0] : r.user))
     .filter(Boolean)) as Person[]
@@ -88,71 +96,28 @@ export default async function ProjectDetailPage({
 
   const taskIds = (tasks ?? []).map(t => t.id)
 
-  // Fetch subtasks for this project's tasks
+  // ── Wave 2: needs taskIds ────────────────────────────────────────────────
   const subtasksByTask: Record<string, Subtask[]> = {}
-  if (taskIds.length > 0) {
-    const { data: subtasks } = await supabase
-      .from('subtasks')
-      .select('*')
-      .in('task_id', taskIds)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true })
-    for (const s of (subtasks ?? []) as Subtask[]) {
-      (subtasksByTask[s.task_id] ??= []).push(s)
-    }
-  }
-
-  // Fetch comments for this project's tasks
   const commentsByTask: Record<string, TaskComment[]> = {}
   if (taskIds.length > 0) {
-    const { data: comments } = await supabase
-      .from('comments')
-      .select('*, author:author_id ( full_name )')
-      .eq('entity_type', 'task')
-      .in('entity_id', taskIds)
-      .order('created_at', { ascending: true })
+    const [{ data: subtasks }, { data: comments }] = await Promise.all([
+      supabase.from('subtasks').select('*').in('task_id', taskIds).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
+      supabase.from('comments').select('*, author:author_id ( full_name )').eq('entity_type', 'task').in('entity_id', taskIds).order('created_at', { ascending: true }),
+    ])
+    for (const st of (subtasks ?? []) as Subtask[]) {
+      (subtasksByTask[st.task_id] ??= []).push(st)
+    }
     for (const c of (comments ?? []) as TaskComment[]) {
       (commentsByTask[c.entity_id] ??= []).push(c)
     }
   }
 
-  // Fetch recurring templates for this project
-  const { data: templates } = await supabase
-    .from('recurring_task_templates')
-    .select('*')
-    .eq('project_id', id)
-    .order('created_at', { ascending: true })
-
-  // Fetch this project's contextual links + custom fields
-  const [{ data: links }, { data: fields }] = await Promise.all([
-    supabase.from('resource_links').select('id, label, url').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
-    supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
-  ])
-
-  // Client contacts (for approval recipients) + this project's approvals
-  const [{ data: contacts }, { data: approvalRows }] = await Promise.all([
-    supabase.from('contacts').select('id, first_name, last_name, is_primary').eq('company_id', project.company_id).order('is_primary', { ascending: false }),
-    supabase.from('approvals').select('id, token, title, status, task_id, contact_id, signed_name, decision_comment, decided_at').eq('project_id', id).order('created_at', { ascending: true }),
-  ])
   const approvalsByTask: Record<string, ApprovalItem[]> = {}
   const projectApprovals: ApprovalItem[] = []
   for (const a of (approvalRows ?? []) as (ApprovalItem & { task_id: string | null })[]) {
     if (a.task_id) (approvalsByTask[a.task_id] ??= []).push(a)
     else projectApprovals.push(a)
   }
-
-  // Fetch time logs for this project
-  const { data: timeLogs } = await supabase
-    .from('time_logs')
-    .select('id, task_id, duration_minutes, is_billable')
-    .eq('project_id', id)
-
-  // Fetch the current user's running timer (if any)
-  const { data: activeTimer } = await supabase
-    .from('active_timers')
-    .select('*')
-    .eq('user_id', user?.id ?? '00000000-0000-0000-0000-000000000000')
-    .maybeSingle()
 
   // Aggregate time
   const minutesByTask: Record<string, number> = {}
