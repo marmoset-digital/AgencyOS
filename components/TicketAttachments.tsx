@@ -6,7 +6,7 @@ import {
   listTicketAttachmentsTeam,
   type Attachment,
 } from '@/app/actions/attachments'
-import { uploadFilesToTicket, formatBytes, MAX_UPLOAD_MB } from '@/lib/attachmentsClient'
+import { uploadFilesToTicket, formatBytes, MAX_UPLOAD_MB, ACCEPT_ATTR, ALLOWED_LABEL } from '@/lib/attachmentsClient'
 
 // Attachment list for a ticket, with optional upload.
 //   token given  → public support portal (client-side, token-scoped)
@@ -88,12 +88,12 @@ export default function TicketAttachments({
       {canUpload && token && (
         <div>
           <label className="inline-flex items-center gap-2 text-xs text-[#254DA5] hover:underline cursor-pointer">
-            <input type="file" multiple onChange={onPick} disabled={busy} className="hidden" />
+            <input type="file" multiple accept={ACCEPT_ATTR} onChange={onPick} disabled={busy} className="hidden" />
             <span>📎 {busy ? 'Uploading…' : 'Attach files'}</span>
           </label>
-          <span className="ml-2 text-xs text-gray-400">
-            Images, PDFs, documents · up to {MAX_UPLOAD_MB}MB each
-          </span>
+          <p className="text-xs text-gray-400 mt-1">
+            {ALLOWED_LABEL} · up to {MAX_UPLOAD_MB}MB each
+          </p>
           {progress && (
             <p className="text-xs text-gray-500 mt-1">
               Uploading {progress.done} of {progress.total}…

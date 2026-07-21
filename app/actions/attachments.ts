@@ -54,11 +54,30 @@ async function companyForToken(token: string) {
   return { adminDb, company: data }
 }
 
+const TYPE_BY_EXT: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', heic: 'image/heic', svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  txt: 'text/plain', csv: 'text/csv',
+  zip: 'application/zip',
+}
+
+// NOT exported - a 'use server' file may only export async functions.
+function resolveType(name: string, type: string): string {
+  if (type && ALLOWED_TYPES.has(type)) return type
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  return TYPE_BY_EXT[ext] ?? type
+}
+
 function validate(file: { name: string; size: number; type: string }): string | null {
   if (!file?.name) return 'Missing file name.'
   if (!file.size || file.size <= 0) return 'That file appears to be empty.'
   if (file.size > MAX_BYTES) return `That file is too large — the limit is ${Math.floor(MAX_BYTES / 1024 / 1024)}MB.`
-  if (!ALLOWED_TYPES.has(file.type)) {
+  if (!ALLOWED_TYPES.has(resolveType(file.name, file.type))) {
     return `That file type isn’t supported (detected: ${file.type || 'unknown'}).`
   }
   return null
