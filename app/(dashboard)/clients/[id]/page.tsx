@@ -4,6 +4,7 @@ import ArchiveButton from '@/components/ArchiveButton'
 import { notFound } from 'next/navigation'
 import { DeleteContactButton } from './contacts/DeleteContactButton'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
+import type { FieldDefinition } from '@/app/actions/customFields'
 import ClientProposals, { type ClientProposal } from './ClientProposals'
 import { normaliseContent, computeTotals, summaryText } from '@/lib/proposalPricing'
 
@@ -18,7 +19,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: company }, { data: contacts }, { data: projects }, { data: invoices }, { data: tickets }, { data: links }, { data: fields }, { data: proposals }] =
+  const [{ data: company }, { data: contacts }, { data: projects }, { data: invoices }, { data: tickets }, { data: links }, { data: fields }, { data: proposals }, { data: fieldDefs }] =
     await Promise.all([
       supabase.from('companies').select('*').eq('id', id).single(),
       supabase.from('contacts').select('*').eq('company_id', id).order('is_primary', { ascending: false }),
@@ -26,8 +27,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       supabase.from('invoices').select('id, invoice_number, status, amount, due_date').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('support_tickets').select('id, subject, status, priority, created_at').eq('company_id', id).order('created_at', { ascending: false }).limit(5),
       supabase.from('resource_links').select('id, label, url').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
-      supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
+      supabase.from('custom_fields').select('id, label, value, definition_id').eq('entity_type', 'company').eq('entity_id', id).order('created_at', { ascending: true }),
       supabase.from('proposals').select('id, title, status, content, expires_at, created_at, token, project_id, signed_name, decision_comment, responded_at, proposal_number').eq('company_id', id).order('created_at', { ascending: false }),
+      supabase.from('custom_field_definitions').select('id, entity_type, label, field_type, options, required, sort_order').eq('entity_type', 'company').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
     ])
 
   if (!company) notFound()
@@ -136,7 +138,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             entityType="company"
             entityId={id}
             links={(links ?? []) as ResourceLink[]}
-            fields={(fields ?? []) as CustomField[]}
+            fields={((fields ?? []) as { id: string; label: string; value: string | null; definition_id: string | null }[]).map(f => ({ id: f.id, label: f.label, value: f.value, definitionId: f.definition_id }))}
+            definitions={(fieldDefs ?? []) as FieldDefinition[]}
           />
 
           {/* Notes */}

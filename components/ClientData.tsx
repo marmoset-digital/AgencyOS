@@ -5,10 +5,11 @@ import {
   addResourceLink, removeResourceLink,
   addCustomField, updateCustomField, removeCustomField,
 } from '@/app/actions/clientData'
+import { setDefinitionValue, type FieldDefinition } from '@/app/actions/customFields'
 
 type Entity = 'company' | 'project'
 export interface ResourceLink { id: string; label: string; url: string }
-export interface CustomField { id: string; label: string; value: string | null }
+export interface CustomField { id: string; label: string; value: string | null; definitionId?: string | null }
 
 // A friendly icon + tag for common link types (Google Sheets/Docs/Drive, etc.).
 function linkKind(url: string): { icon: string; tag: string | null } {
@@ -23,17 +24,28 @@ function linkKind(url: string): { icon: string; tag: string | null } {
 type Notice = { kind: 'ok' | 'error'; text: string } | null
 
 export default function ClientData({
-  entityType, entityId, links, fields,
+  entityType, entityId, links, fields, definitions = [],
 }: {
   entityType: Entity
   entityId: string
   links: ResourceLink[]
   fields: CustomField[]
+  definitions?: FieldDefinition[]
 }) {
+  // definition_id set = an answer to a global field; null = an ad-hoc one-off.
+  const valueByDef = new Map<string, CustomField>()
+  const adHoc: CustomField[] = []
+  for (const f of fields) {
+    if (f.definitionId) valueByDef.set(f.definitionId, f)
+    else adHoc.push(f)
+  }
   return (
     <>
       <LinksCard entityType={entityType} entityId={entityId} links={links} />
-      <FieldsCard entityType={entityType} entityId={entityId} fields={fields} />
+      {definitions.length > 0 && (
+        <GlobalFieldsCard entityType={entityType} entityId={entityId} definitions={definitions} valueByDef={valueByDef} />
+      )}
+      <FieldsCard entityType={entityType} entityId={entityId} fields={adHoc} />
     </>
   )
 }
@@ -109,6 +121,86 @@ function LinksCard({ entityType, entityId, links }: { entityType: Entity; entity
   )
 }
 
+function GlobalFieldsCard({
+  entityType, entityId, definitions, valueByDef,
+}: {
+  entityType: Entity
+  entityId: string
+  definitions: FieldDefinition[]
+  valueByDef: Map<string, CustomField>
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 className="font-semibold text-gray-900 mb-3">Custom Fields</h2>
+      <div className="space-y-2">
+        {definitions.map(def => (
+          <GlobalFieldRow
+            key={def.id}
+            def={def}
+            entityType={entityType}
+            entityId={entityId}
+            initial={valueByDef.get(def.id)?.value ?? ''}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function GlobalFieldRow({
+  def, entityType, entityId, initial,
+}: {
+  def: FieldDefinition
+  entityType: Entity
+  entityId: string
+  initial: string
+}) {
+  const [value, setValue] = useState(initial)
+  const [err, setErr] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const dirty = value !== initial
+
+  function save() {
+    setErr(null)
+    startTransition(async () => {
+      const res = await setDefinitionValue(def.id, entityType, entityId, value)
+      if (res?.error) setErr(res.error)
+    })
+  }
+
+  const inputCls = 'w-full text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-[#E8611A] focus:outline-none py-0.5'
+
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <div className="w-40 shrink-0 text-gray-500 truncate" title={def.label}>
+        {def.label}{def.required && <span className="ml-0.5 text-red-500">*</span>}
+      </div>
+      <div className="flex-1 min-w-0">
+        {def.field_type === 'select' ? (
+          <select value={value} onChange={e => setValue(e.target.value)} className={inputCls + ' border-gray-200'}>
+            <option value="">—</option>
+            {def.options.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ) : (
+          <input
+            type={def.field_type === 'number' ? 'number' : def.field_type === 'date' ? 'date' : 'text'}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            placeholder="—"
+            className={inputCls}
+          />
+        )}
+        {err && <p className="text-xs text-red-600 mt-0.5">{err}</p>}
+      </div>
+      {dirty && (
+        <button onClick={save} disabled={isPending} className="text-xs text-[#E8611A] font-medium hover:underline disabled:opacity-50 shrink-0">
+          Save
+        </button>
+      )}
+    </div>
+  )
+}
+
 function FieldsCard({ entityType, entityId, fields }: { entityType: Entity; entityId: string; fields: CustomField[] }) {
   const [isPending, startTransition] = useTransition()
   const [label, setLabel] = useState('')
@@ -128,7 +220,7 @@ function FieldsCard({ entityType, entityId, fields }: { entityType: Entity; enti
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-900">Custom Fields</h2>
+        <h2 className="font-semibold text-gray-900">One-off fields</h2>
         <button onClick={() => setAdding(a => !a)} className="text-xs text-[#E8611A] hover:underline font-medium">
           {adding ? 'Cancel' : '+ Add field'}
         </button>

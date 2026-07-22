@@ -7,6 +7,7 @@ import TaskBoard from './TaskBoard'
 import RecurringTemplates from './RecurringTemplates'
 import ProjectTeam from './ProjectTeam'
 import ClientData, { type ResourceLink, type CustomField } from '@/components/ClientData'
+import type { FieldDefinition } from '@/app/actions/customFields'
 import ApprovalRequester, { type ApprovalContact, type ApprovalItem, type ApprovalLink } from '@/components/ApprovalRequester'
 import StageSelect from './StageSelect'
 import type { Subtask } from '@/types/subtask'
@@ -71,16 +72,18 @@ export default async function ProjectDetailPage({
     { data: approvalRows },
     { data: timeLogs },
     { data: activeTimer },
+    { data: fieldDefs },
   ] = await Promise.all([
     supabase.from('tasks').select(`*, assignee:assignee_id ( id, full_name )`).eq('project_id', id).order('created_at', { ascending: true }),
     supabase.from('users').select('id, full_name, role').order('full_name', { ascending: true }),
     supabase.from('project_members').select('user:user_id ( id, full_name, role )').eq('project_id', id),
     supabase.from('resource_links').select('id, label, url').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
-    supabase.from('custom_fields').select('id, label, value').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
+    supabase.from('custom_fields').select('id, label, value, definition_id').eq('entity_type', 'project').eq('entity_id', id).order('created_at', { ascending: true }),
     supabase.from('contacts').select('id, first_name, last_name, is_primary').eq('company_id', project.company_id).order('is_primary', { ascending: false }),
     supabase.from('approvals').select('id, token, title, status, task_id, contact_id, signed_name, decision_comment, decided_at').eq('project_id', id).order('created_at', { ascending: true }),
     supabase.from('time_logs').select('id, task_id, duration_minutes, is_billable').eq('project_id', id),
     supabase.from('active_timers').select('*').eq('user_id', user?.id ?? '00000000-0000-0000-0000-000000000000').maybeSingle(),
+    supabase.from('custom_field_definitions').select('id, entity_type, label, field_type, options, required, sort_order').eq('entity_type', 'project').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
   ])
 
   const members = (((memberRows ?? []) as unknown as { user: Person | Person[] | null }[])
@@ -256,7 +259,8 @@ export default async function ProjectDetailPage({
           entityType="project"
           entityId={id}
           links={(links ?? []) as ResourceLink[]}
-          fields={(fields ?? []) as CustomField[]}
+          fields={((fields ?? []) as { id: string; label: string; value: string | null; definition_id: string | null }[]).map(f => ({ id: f.id, label: f.label, value: f.value, definitionId: f.definition_id }))}
+          definitions={(fieldDefs ?? []) as FieldDefinition[]}
         />
       </div>
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { updateSettings, updateUserCostRate } from '@/app/actions/billing'
 import { getXeroStatus } from '@/lib/xero'
@@ -40,6 +41,16 @@ export default async function SettingsPage({
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-500 mt-1">Billing rates, defaults, and Xero.</p>
       </div>
+
+      <Link href="/settings/custom-fields" className="block bg-white rounded-xl border border-gray-200 p-6 mb-6 hover:border-gray-300 transition">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Custom fields</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Fields that appear on every client or project.</p>
+          </div>
+          <span className="text-gray-400" aria-hidden="true">&rarr;</span>
+        </div>
+      </Link>
 
       {/* Global default rates */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
