@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import SupportPortal, { type PortalTicket, type PortalReply, type PortalContact } from './SupportPortal'
+import { getClientContext, stageLabel } from '@/lib/clientContext'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Support — Marmoset' }
@@ -77,12 +78,19 @@ export default async function SupportPortalPage({ params }: { params: Promise<{ 
     replies: repliesByTicket.get(t.id as string) ?? [],
   }))
 
+  // Client-facing: names only, no dollar amounts on a token-authenticated page.
+  const clientContext = await getClientContext(adminDb, company.id)
+  const portalProjects = clientContext.projects.map(p => ({ id: p.id, name: p.name, stageLabel: stageLabel(p.stage) }))
+  const portalServices = clientContext.services.map(s => ({ id: s.id, name: s.description }))
+
   return (
     <SupportPortal
       token={token}
       companyName={company.name}
       tickets={portalTickets}
       contacts={(contacts ?? []) as PortalContact[]}
+      projects={portalProjects}
+      services={portalServices}
     />
   )
 }

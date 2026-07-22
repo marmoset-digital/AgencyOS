@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createTicketPublic, addReplyPublic } from '@/app/actions/tickets'
 import { uploadFilesToTicket, ACCEPT_ATTR, ALLOWED_LABEL, MAX_UPLOAD_MB, formatBytes } from '@/lib/attachmentsClient'
 import { listTicketAttachmentsPublic, type Attachment } from '@/app/actions/attachments'
+import ClientContextPanel, { type PanelProject, type PanelService } from '@/components/ClientContextPanel'
 
 export interface PortalReply { id: string; content: string; author_type: string; created_at: string | null; author_label: string }
 export interface PortalTicket { id: string; subject: string; description: string | null; priority: string; status: string; created_at: string | null; replies: PortalReply[] }
@@ -41,8 +42,9 @@ function AttList({ items }: { items: Attachment[] }) {
   )
 }
 
-export default function SupportPortal({ token, companyName, tickets, contacts }: {
+export default function SupportPortal({ token, companyName, tickets, contacts, projects = [], services = [] }: {
   token: string; companyName: string; tickets: PortalTicket[]; contacts: PortalContact[]
+  projects?: PanelProject[]; services?: PanelService[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -110,6 +112,12 @@ export default function SupportPortal({ token, companyName, tickets, contacts }:
           <h1 className="text-xl font-bold text-gray-900 mt-1">Support</h1>
           <p className="text-sm text-gray-500">{companyName}</p>
         </div>
+
+        {(projects.length > 0 || services.length > 0) && (
+          <div className="mb-5">
+            <ClientContextPanel projects={projects} services={services} />
+          </div>
+        )}
 
         {/* New request */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-5">

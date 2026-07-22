@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { listTicketAttachmentsTeam, type Attachment } from '@/app/actions/attachments'
 import { formatBytes } from '@/lib/attachmentsClient'
+import ClientContextPanel, { type PanelProject, type PanelService } from '@/components/ClientContextPanel'
 
 // Attachments belonging to one message (the original request, or a single reply).
 function AttList({ items }: { items: Attachment[] }) {
@@ -50,8 +51,9 @@ const PRIORITY_LABEL: Record<string, string> = { low: 'Low', medium: 'Medium', h
 function fmt(d: string | null) { return d ? new Date(d).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '' }
 function userName(u: DetailUser) { return u.full_name || u.email || 'Unnamed' }
 
-export default function TicketDetail({ ticket, replies, users, projects }: {
+export default function TicketDetail({ ticket, replies, users, projects, context }: {
   ticket: DetailTicket; replies: DetailReply[]; users: DetailUser[]; projects: DetailProject[]
+  context: { projects: PanelProject[]; services: PanelService[]; totalLabel: string | null }
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -138,6 +140,7 @@ export default function TicketDetail({ ticket, replies, users, projects }: {
 
         {/* Right: controls */}
         <div className="col-span-1 space-y-4">
+          <ClientContextPanel projects={context.projects} services={context.services} totalLabel={context.totalLabel} linkProjects />
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Status</label>

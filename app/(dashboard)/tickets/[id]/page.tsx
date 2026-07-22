@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import TicketDetail, { type DetailTicket, type DetailReply, type DetailUser, type DetailProject } from './TicketDetail'
+import { getClientContext, stageLabel, formatMoney } from '@/lib/clientContext'
 
 export const metadata = { title: 'Ticket' }
 
@@ -22,7 +23,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     .maybeSingle()
   if (!t) notFound()
 
-  const [{ data: replies }, { data: users }, { data: projects }] = await Promise.all([
+  const [{ data: replies }, { data: users }, { data: projects }, clientContext] = await Promise.all([
     supabase
       .from('ticket_replies')
       .select('id, content, author_type, created_at, author:author_user_id ( full_name, email ), contact:author_contact_id ( first_name, last_name )')
@@ -30,7 +31,19 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
       .order('created_at', { ascending: true }),
     supabase.from('users').select('id, full_name, email').eq('is_active', true).order('full_name', { ascending: true }),
     supabase.from('projects').select('id, name, company_id').eq('company_id', t.company_id as string).order('name', { ascending: true }),
+    getClientContext(supabase, t.company_id as string),
   ])
+
+  // Team panel: services WITH amounts + a total monthly value.
+  const context = {
+    projects: clientContext.projects.map(p => ({ id: p.id, name: p.name, stageLabel: stageLabel(p.stage) })),
+    services: clientContext.services.map(s => ({
+      id: s.id,
+      name: s.description,
+      detail: `${formatMoney(Number(s.amount))} / ${s.cadence === 'yearly' ? 'yr' : 'mo'}`,
+    })),
+    totalLabel: clientContext.services.length ? `${formatMoney(clientContext.monthlyValue)} / mo` : null,
+  }
 
   const ticket: DetailTicket = {
     id: t.id as string,
@@ -64,6 +77,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
       replies={replyRows}
       users={(users ?? []) as DetailUser[]}
       projects={(projects ?? []) as DetailProject[]}
+      context={context}
     />
   )
 }
