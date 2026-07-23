@@ -32,7 +32,7 @@ export default function NewStandaloneTask({ users }: { users: { id: string; full
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 z-20 w-96 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-left">
+        <div className="absolute right-0 top-full mt-2 z-20 w-[30rem] bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-left">
           <div className="text-sm font-semibold text-gray-900 mb-1">New internal task</div>
           <p className="text-xs text-gray-400 mb-3">Not attached to any project or client.</p>
           <form action={submit} className="space-y-3">
