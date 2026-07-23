@@ -65,6 +65,16 @@ export async function stopTimer(projectId: string) {
   revalidatePath(`/projects/${projectId}`)
 }
 
+// ── Discard the current user's running timer WITHOUT logging any time ─────────
+// For when you forgot to stop a timer and don't want the bogus elapsed time.
+export async function discardTimer(projectId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+  await supabase.from('active_timers').delete().eq('user_id', user.id)
+  revalidatePath(`/projects/${projectId}`)
+}
+
 // ── Log time manually ───────────────────────────────────────
 export async function logTime(formData: FormData) {
   const supabase = await createClient()

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, Fragment } from 'react'
 import { createTask, updateTaskStatus, deleteTask } from '@/app/actions/projects'
-import { startTimer, stopTimer, logTime } from '@/app/actions/time'
+import { startTimer, stopTimer, discardTimer, logTime } from '@/app/actions/time'
 import { editTask, addSubtask, toggleSubtask, deleteSubtask } from '@/app/actions/tasks'
 import { addComment, deleteComment } from '@/app/actions/comments'
 import ApprovalRequester, { type ApprovalContact, type ApprovalItem, type ApprovalLink } from '@/components/ApprovalRequester'
@@ -110,14 +110,24 @@ function TaskTimer({
 
   if (isRunning && startedAt) {
     return (
-      <button
-        onClick={() => start(async () => { await stopTimer(projectId) })}
-        disabled={isPending}
-        title="Stop timer"
-        className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
-      >
-        ⏹ {liveElapsed(startedAt)}
-      </button>
+      <span className="inline-flex items-center gap-2">
+        <button
+          onClick={() => start(async () => { await stopTimer(projectId) })}
+          disabled={isPending}
+          title="Stop timer & log the time"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+        >
+          ⏹ {liveElapsed(startedAt)}
+        </button>
+        <button
+          onClick={() => { if (confirm('Discard this timer without logging any time?')) start(async () => { await discardTimer(projectId) }) }}
+          disabled={isPending}
+          title="Discard timer (no time logged)"
+          className="text-xs text-gray-300 hover:text-red-500 disabled:opacity-50"
+        >
+          ✕
+        </button>
+      </span>
     )
   }
 
@@ -354,7 +364,7 @@ function TaskDetailPanel({
               <input name="due_date" type="date" defaultValue={task.due_date ?? ''} className="input text-sm" />
             </div>
             <div>
-              <input name="time_estimate" type="number" min="0" step="15" defaultValue={task.time_estimate ?? ''} className="input text-sm" placeholder="Est. minutes" />
+              <input name="time_estimate" type="number" min="0" step="1" defaultValue={task.time_estimate ?? ''} className="input text-sm" placeholder="Est. minutes" />
             </div>
             <div className="col-span-2">
               <textarea name="description" rows={2} defaultValue={task.description ?? ''} className="input resize-none text-sm" placeholder="Description (optional)" />
@@ -531,7 +541,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
               <input name="due_date" type="date" className="input text-sm" />
             </div>
             <div>
-              <input name="time_estimate" type="number" min="0" step="15" className="input text-sm" placeholder="Est. minutes (e.g. 60)" />
+              <input name="time_estimate" type="number" min="0" step="1" className="input text-sm" placeholder="Est. minutes (e.g. 60)" />
             </div>
             <div className="col-span-2">
               <textarea name="description" rows={2} className="input resize-none text-sm" placeholder="Description (optional)" />

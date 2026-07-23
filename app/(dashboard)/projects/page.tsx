@@ -97,7 +97,7 @@ export default async function ProjectsPage({
               key={t}
               href={t
                 ? `/projects?type=${t}${stage ? `&stage=${stage}` : ''}${q ? `&q=${q}` : ''}`
-                : `/projects${stage ? `?stage=${stage}` : ''}${q ? `${stage ? '&' : '?'}q=${q}` : ''}`
+                : '/projects'
               }
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
                 (type ?? '') === t

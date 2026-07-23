@@ -57,6 +57,11 @@ export async function createProject(formData: FormData) {
 
   if (error) return { error: error.message }
 
+  // Seed the project's team with its manager, so the assignee is a member by default.
+  if (payload.assigned_to) {
+    await supabase.from('project_members').insert({ project_id: data.id, user_id: payload.assigned_to })
+  }
+
   // Lay down the template's tasks, dated from this project's start date.
   // Best-effort: a template problem must never cost you the project you just made.
   const templateId = (formData.get('template_id') as string) || ''
