@@ -3,6 +3,29 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// ── Create a standalone (internal) task — no project, no client ──────────
+export async function createStandaloneTask(formData: FormData): Promise<{ ok?: true; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+  const title = ((formData.get('title') as string) || '').trim()
+  if (!title) return { error: 'Task title is required.' }
+  const { error } = await supabase.from('tasks').insert({
+    project_id: null,
+    company_id: null,
+    title,
+    description: ((formData.get('description') as string) || '').trim() || null,
+    assignee_id: (formData.get('assignee_id') as string) || null,
+    due_date: (formData.get('due_date') as string) || null,
+    priority: (formData.get('priority') as string) || 'medium',
+    status: 'todo',
+    created_by: user.id,
+  })
+  if (error) return { error: error.message }
+  revalidatePath('/tasks')
+  return { ok: true }
+}
+
 // ── Edit an existing task (inline; revalidates, no redirect) ─────────────
 export async function editTask(taskId: string, projectId: string, formData: FormData) {
   const supabase = await createClient()

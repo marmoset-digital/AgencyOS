@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { updateTaskStatus } from '@/app/actions/projects'
+import NewStandaloneTask from '@/components/NewStandaloneTask'
 
 interface GTask {
   id: string
@@ -12,7 +13,7 @@ interface GTask {
   priority: string
   assignee_id: string | null
   due_date: string | null
-  project_id: string
+  project_id: string | null
   assignee: { id: string; full_name: string } | null
   project: { id: string; name: string; stage: string; company: { id: string; name: string } | null } | null
 }
@@ -98,9 +99,12 @@ export default function GlobalTasks({
           <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
           <p className="text-gray-500 mt-1">All tasks across every project.</p>
         </div>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-          <button onClick={() => setView('list')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>☰ List</button>
-          <button onClick={() => setView('board')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${view === 'board' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>⊞ Board</button>
+        <div className="flex items-center gap-3">
+          <NewStandaloneTask users={users} />
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button onClick={() => setView('list')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>☰ List</button>
+            <button onClick={() => setView('board')} className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${view === 'board' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>⊞ Board</button>
+          </div>
         </div>
       </div>
 
@@ -153,10 +157,14 @@ export default function GlobalTasks({
                 {filtered.map(t => (
                   <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                     <td className="px-5 py-3.5">
-                      <Link href={`/projects/${t.project_id}`} className={`font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 hover:text-[#E8611A]'}`}>{t.title}</Link>
+                      {t.project_id
+                        ? <Link href={`/projects/${t.project_id}`} className={`font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 hover:text-[#E8611A]'}`}>{t.title}</Link>
+                        : <span className={`font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</span>}
                     </td>
                     <td className="px-4 py-3.5">
-                      <Link href={`/projects/${t.project_id}`} className="text-xs text-gray-600 hover:text-[#E8611A]">{t.project?.name ?? '—'}</Link>
+                      {t.project_id
+                        ? <Link href={`/projects/${t.project_id}`} className="text-xs text-gray-600 hover:text-[#E8611A]">{t.project?.name ?? '—'}</Link>
+                        : <span className="text-xs text-gray-400 italic">Internal</span>}
                       {t.project?.company && <div className="text-[11px] text-gray-400">{t.project.company.name}</div>}
                     </td>
                     <td className="px-4 py-3.5"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[t.priority] ?? 'bg-gray-100 text-gray-600'}`}>{t.priority}</span></td>
@@ -196,8 +204,10 @@ export default function GlobalTasks({
                 )}
                 {byStatus[col.key].map(t => (
                   <div key={t.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition">
-                    <Link href={`/projects/${t.project_id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1">{t.title}</Link>
-                    <div className="text-[11px] text-gray-400 mb-2">{t.project?.name}{t.project?.company ? ` · ${t.project.company.name}` : ''}</div>
+                    {t.project_id
+                      ? <Link href={`/projects/${t.project_id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1">{t.title}</Link>
+                      : <span className="text-sm font-medium text-gray-900 leading-snug block mb-1">{t.title}</span>}
+                    <div className="text-[11px] text-gray-400 mb-2">{t.project ? `${t.project.name}${t.project.company ? ` · ${t.project.company.name}` : ''}` : 'Internal'}</div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[t.priority] ?? 'bg-gray-100 text-gray-600'}`}>{t.priority}</span>
                       {formatDue(t.due_date)}

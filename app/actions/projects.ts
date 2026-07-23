@@ -133,11 +133,12 @@ export async function createTask(formData: FormData) {
 }
 
 // ── Update Task Status ──────────────────────────────────────
-export async function updateTaskStatus(taskId: string, status: string, projectId: string) {
+export async function updateTaskStatus(taskId: string, status: string, projectId: string | null) {
   const supabase = await createClient()
   const { error } = await supabase.from('tasks').update({ status }).eq('id', taskId)
   if (error) return { error: error.message }
-  revalidatePath(`/projects/${projectId}`)
+  if (projectId) revalidatePath(`/projects/${projectId}`)
+  revalidatePath('/tasks')
 }
 
 // ── Update Task ─────────────────────────────────────────────
