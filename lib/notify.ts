@@ -11,11 +11,12 @@ const FROM = 'Marmoset Agency OS <support@marmoset.com.au>'
 const APP = 'https://app.marmoset.com.au'
 const ENDPOINT = 'https://api.emailit.com/v2/emails'
 
-export async function notifyTeam(subject: string, html: string): Promise<void> {
+// Low-level send to a specific address via the Emailit HTTP API. Fire-and-forget:
+// never throws into the caller.
+export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   try {
     const key = process.env.EMAILIT_API_KEY
     if (!key) return // not configured — silently skip
-    const to = process.env.NOTIFY_EMAIL || 'admin@marmoset.com.au'
     await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
@@ -32,6 +33,11 @@ export async function notifyTeam(subject: string, html: string): Promise<void> {
   } catch {
     // best-effort only — never surface to the caller
   }
+}
+
+// Team notification → the configured NOTIFY_EMAIL (defaults to admin@).
+export async function notifyTeam(subject: string, html: string): Promise<void> {
+  await sendEmail(process.env.NOTIFY_EMAIL || 'admin@marmoset.com.au', subject, html)
 }
 
 // Convenience builder for the proposal-decision email.

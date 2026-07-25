@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/auto-invoice", "schedule": "0 20 * * *" }
+    { "path": "/api/cron/auto-invoice", "schedule": "0 20 * * *" },
+    { "path": "/api/cron/timer-reminder", "schedule": "0 6,7 * * *" }
   ]
 }
