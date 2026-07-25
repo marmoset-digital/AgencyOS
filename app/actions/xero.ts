@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
-  adminDb, createXeroContact, getStoredConnection, disconnect, markSynced, fetchOutstandingInvoices, fetchContacts,
+  adminDb, createXeroContact, updateXeroContact, findXeroContactByName, getStoredConnection, disconnect, markSynced, fetchOutstandingInvoices, fetchContacts,
   createDraftInvoice, mapStatus, xeroDate,
   type XeroContact, type NewInvoiceLine,
 } from '@/lib/xero'
@@ -279,6 +279,52 @@ export async function linkCompanyToXeroContact(companyId: string, xeroContactId:
 // ── Phase A: one-way push — create a Xero contact when we add a client ──────────
 // Idempotent + best-effort. Skips if Xero isn't connected or the company is already
 // linked. NEVER throws, so callers can await it without risking the client-create.
+// Push a linked client's current name + primary-contact email/phone to Xero when
+// details change in the OS. Only touches already-linked clients; a not-yet-linked
+// active client is created via pushCompanyToXero instead. Best-effort, never throws.
+export async function syncCompanyToXero(
+  companyId: string,
+): Promise<{ ok: true } | { skipped: string } | { error: string }> {
+  try {
+    const conn = await getStoredConnection()
+    if (!conn) return { skipped: 'xero_not_connected' }
+
+    const admin = adminDb()
+    const { data: company } = await admin
+      .from('companies')
+      .select('id, name, status, xero_contact_id')
+      .eq('id', companyId)
+      .single()
+    if (!company) return { error: 'Company not found.' }
+
+    if (!company.xero_contact_id) {
+      // Not linked yet — create it if the client is active, otherwise skip.
+      if (company.status === 'active_client') return await pushCompanyToXero(companyId)
+      return { skipped: 'not_linked' }
+    }
+    if (!company.name) return { skipped: 'no_name' }
+
+    const { data: contact } = await admin
+      .from('contacts')
+      .select('first_name, last_name, email, phone')
+      .eq('company_id', companyId)
+      .eq('is_primary', true)
+      .maybeSingle()
+
+    await updateXeroContact(company.xero_contact_id, {
+      name: company.name,
+      email: contact?.email ?? null,
+      firstName: contact?.first_name ?? null,
+      lastName: contact?.last_name ?? null,
+      phone: contact?.phone ?? null,
+    })
+    revalidatePath(`/clients/${companyId}`)
+    return { ok: true }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Xero contact sync failed.' }
+  }
+}
+
 export async function pushCompanyToXero(
   companyId: string,
 ): Promise<{ ok: true; contactId: string } | { skipped: string } | { error: string }> {
@@ -304,13 +350,22 @@ export async function pushCompanyToXero(
       .eq('is_primary', true)
       .maybeSingle()
 
-    const created = await createXeroContact({
-      name: company.name,
-      email: contact?.email ?? null,
-      firstName: contact?.first_name ?? null,
-      lastName: contact?.last_name ?? null,
-      phone: contact?.phone ?? null,
-    })
+    let created: { ContactID: string; Name: string }
+    try {
+      created = await createXeroContact({
+        name: company.name,
+        email: contact?.email ?? null,
+        firstName: contact?.first_name ?? null,
+        lastName: contact?.last_name ?? null,
+        phone: contact?.phone ?? null,
+      })
+    } catch (createErr) {
+      // Most likely "contact name must be unique" — link the existing Xero contact
+      // with that name instead of leaving the client unlinked.
+      const existing = await findXeroContactByName(company.name)
+      if (!existing) return { error: createErr instanceof Error ? createErr.message : 'Xero contact create failed.' }
+      created = existing
+    }
 
     const { error: e } = await admin
       .from('companies')
