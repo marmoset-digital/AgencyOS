@@ -188,6 +188,55 @@ export async function renameProjectTemplate(
   return { ok: true }
 }
 
+// Create (no id) or update (with id) a template's full content from the hand editor.
+export async function saveTemplate(input: {
+  id?: string | null
+  name: string
+  description?: string | null
+  type?: string | null
+  tasks: TemplateTask[]
+}): Promise<Result> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not signed in.' }
+
+  const name = input.name.trim()
+  if (!name) return { error: 'Give the template a name.' }
+
+  const tasks: TemplateTask[] = (input.tasks ?? [])
+    .map(t => ({
+      title: (t.title ?? '').trim(),
+      description: t.description?.trim() || null,
+      priority: PRIORITIES.includes(t.priority) ? t.priority : 'medium',
+      time_estimate: Number.isFinite(Number(t.time_estimate)) && Number(t.time_estimate) > 0 ? Math.round(Number(t.time_estimate)) : null,
+      due_offset_days: Number.isFinite(Number(t.due_offset_days)) ? Math.round(Number(t.due_offset_days)) : null,
+    }))
+    .filter(t => t.title)
+  if (tasks.length === 0) return { error: 'Add at least one task.' }
+
+  const content: TemplateContent = { type: input.type ?? null, tasks }
+  const description = input.description?.trim() || null
+
+  if (input.id) {
+    const { error } = await supabase
+      .from('project_templates')
+      .update({ name, description, content, updated_at: new Date().toISOString() })
+      .eq('id', input.id)
+    if (error) return { error: error.message }
+    revalidatePath('/projects/templates')
+    return { ok: true, id: input.id }
+  }
+
+  const { data, error } = await supabase
+    .from('project_templates')
+    .insert({ name, description, content, created_by: user.id })
+    .select('id')
+    .single()
+  if (error) return { error: error.message }
+  revalidatePath('/projects/templates')
+  return { ok: true, id: data.id }
+}
+
 export async function deleteProjectTemplate(id: string): Promise<Result> {
   const supabase = await createClient()
   const { error } = await supabase.from('project_templates').delete().eq('id', id)
