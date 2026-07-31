@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface Entry {
   id: string
@@ -15,10 +16,12 @@ interface Entry {
   projectName: string | null
   companyId: string | null
   companyName: string | null
+  taskId: string | null
   taskTitle: string | null
   cost: number
 }
 interface Opt { id: string; name: string }
+interface Preset { key: string; label: string; from: string; to: string }
 
 function hrs(mins: number) {
   return (mins / 60).toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + 'h'
@@ -26,29 +29,47 @@ function hrs(mins: number) {
 function money(n: number) {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+// Melbourne-local day key (browser is in Australia/Melbourne, DST-aware).
+function localYmd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function dayKey(iso: string) { return localYmd(new Date(iso)) }
+function fmtFull(ymd: string) {
+  return new Date(ymd + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+}
 
 export default function Timesheet({
-  entries, users, companies, projects, period,
+  entries, users, companies, projects, range, presets,
 }: {
   entries: Entry[]
   users: Opt[]
   companies: Opt[]
   projects: Opt[]
-  period: { ym: string; label: string; prev: string; next: string }
+  range: { from: string; to: string }
+  presets: Preset[]
 }) {
+  const router = useRouter()
   const [userId, setUserId] = useState('')
   const [companyId, setCompanyId] = useState('')
   const [projectId, setProjectId] = useState('')
   const [billable, setBillable] = useState('') // '', 'billable', 'internal'
+  const [customFrom, setCustomFrom] = useState(range.from)
+  const [customTo, setCustomTo] = useState(range.to)
 
-  const filtered = useMemo(() => entries.filter(e => {
+  // Precise range filter by Melbourne-local date (the server fetched a ±1-day margin).
+  const inRange = useMemo(() => entries.filter(e => {
+    const d = dayKey(e.loggedAt)
+    return d >= range.from && d <= range.to
+  }), [entries, range.from, range.to])
+
+  const filtered = useMemo(() => inRange.filter(e => {
     if (userId && e.userId !== userId) return false
     if (companyId && e.companyId !== companyId) return false
     if (projectId && e.projectId !== projectId) return false
     if (billable === 'billable' && !e.isBillable) return false
     if (billable === 'internal' && e.isBillable) return false
     return true
-  }), [entries, userId, companyId, projectId, billable])
+  }), [inRange, userId, companyId, projectId, billable])
 
   const totals = useMemo(() => {
     let mins = 0, billMins = 0, cost = 0
@@ -72,19 +93,64 @@ export default function Timesheet({
     return [...m].sort((a, b) => b[1].mins - a[1].mins)
   }, [filtered])
 
+  const byTask = useMemo(() => {
+    const m = new Map<string, { label: string; project: string | null; mins: number; billMins: number }>()
+    for (const e of filtered) {
+      const key = e.taskId ?? (e.projectId ? 'notask:' + e.projectId : 'unassigned')
+      const label = e.taskTitle ?? (e.projectId ? 'Project work (no task)' : 'Unassigned')
+      const cur = m.get(key) ?? { label, project: e.projectName, mins: 0, billMins: 0 }
+      cur.mins += e.minutes
+      if (e.isBillable) cur.billMins += e.minutes
+      m.set(key, cur)
+    }
+    return [...m.values()].sort((a, b) => b.mins - a.mins)
+  }, [filtered])
+
+  const applyCustom = () => {
+    let f = customFrom, t = customTo
+    if (!f || !t) return
+    if (f > t) { const x = f; f = t; t = x }
+    router.push(`/time?from=${f}&to=${t}`)
+  }
+
+  const activePreset = presets.find(p => p.from === range.from && p.to === range.to)?.key
+  const rangeLabel = range.from === range.to ? fmtFull(range.from) : `${fmtFull(range.from)} – ${fmtFull(range.to)}`
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Time Tracking</h1>
-          <p className="text-gray-500 mt-1">Logged time across the team — {period.label}.</p>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Time Tracking</h1>
+        <p className="text-gray-500 mt-1">Logged time across the team — {rangeLabel}.</p>
+      </div>
+
+      {/* Range presets + custom */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
+          {presets.map(p => {
+            const active = p.key === activePreset
+            return (
+              <Link
+                key={p.key}
+                href={`/time?from=${p.from}&to=${p.to}`}
+                className={
+                  'rounded-lg px-3 py-1.5 text-sm border ' +
+                  (active
+                    ? 'bg-[#E8611A] border-[#E8611A] text-white'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-600')
+                }
+              >
+                {p.label}
+              </Link>
+            )
+          })}
         </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/time?month=${period.prev}`} className="border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-600">← Prev</Link>
-          <span className="text-sm font-medium text-gray-700 w-32 text-center">{period.label}</span>
-          <Link href={`/time?month=${period.next}`} className="border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-600">Next →</Link>
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+          <span className="text-xs text-gray-400">Custom range</span>
+          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="input text-sm" />
+          <span className="text-gray-400 text-sm">→</span>
+          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="input text-sm" />
+          <button onClick={applyCustom} className="rounded-lg px-3 py-1.5 text-sm bg-gray-900 text-white hover:bg-gray-800">Apply</button>
         </div>
       </div>
 
@@ -130,22 +196,43 @@ export default function Timesheet({
         <span className="text-xs text-gray-400 ml-1">{filtered.length} entr{filtered.length === 1 ? 'y' : 'ies'}</span>
       </div>
 
-      {/* By person */}
-      {byPerson.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By person</div>
-          <div className="flex flex-col gap-1.5">
-            {byPerson.map(([name, v]) => (
-              <div key={name} className="flex items-center gap-3 text-sm">
-                <span className="text-gray-800 w-40">{name}</span>
-                <span className="text-gray-700 w-20 text-right">{hrs(v.mins)}</span>
-                <span className="text-green-700 w-24 text-right text-xs">{hrs(v.billMins)} billable</span>
-                <span className="text-gray-500 w-24 text-right text-xs">{money(v.cost)} cost</span>
-              </div>
-            ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* By person */}
+        {byPerson.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By person</div>
+            <div className="flex flex-col gap-1.5">
+              {byPerson.map(([name, v]) => (
+                <div key={name} className="flex items-center gap-3 text-sm">
+                  <span className="text-gray-800 flex-1 min-w-0 truncate">{name}</span>
+                  <span className="text-gray-700 w-20 text-right">{hrs(v.mins)}</span>
+                  <span className="text-green-700 w-24 text-right text-xs">{hrs(v.billMins)} billable</span>
+                  <span className="text-gray-500 w-24 text-right text-xs">{money(v.cost)} cost</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* By task */}
+        {byTask.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By task</div>
+            <div className="flex flex-col gap-1.5">
+              {byTask.map((t, i) => (
+                <div key={i} className="flex items-center gap-3 text-sm">
+                  <span className="flex-1 min-w-0">
+                    <span className="text-gray-800 block truncate">{t.label}</span>
+                    {t.project && <span className="text-[11px] text-gray-400 block truncate">{t.project}</span>}
+                  </span>
+                  <span className="text-gray-700 w-20 text-right">{hrs(t.mins)}</span>
+                  <span className="text-green-700 w-24 text-right text-xs">{hrs(t.billMins)} billable</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Entries */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
