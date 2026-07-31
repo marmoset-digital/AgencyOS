@@ -46,6 +46,9 @@ export default function ArchiveButton({
           : await archiveProject(id)
       if (res && 'error' in res && res.error) {
         setErr(res.error)
+      } else if (!archived) {
+        // Just archived — it's now hidden, so return to the list instead of sitting on it.
+        router.push(kind === 'client' ? '/clients' : '/projects')
       } else {
         router.refresh()
       }

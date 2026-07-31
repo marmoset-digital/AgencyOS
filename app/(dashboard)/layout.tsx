@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
+import DatePickerEnhancer from '@/components/DatePickerEnhancer'
 
 export default async function DashboardLayout({
   children,
@@ -20,6 +21,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <DatePickerEnhancer />
       <Sidebar user={profile} />
       <main className="flex-1 overflow-y-auto">
         {children}
