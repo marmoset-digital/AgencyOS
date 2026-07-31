@@ -15,6 +15,7 @@ interface Entry {
   projectName: string | null
   companyId: string | null
   companyName: string | null
+  taskId: string | null
   taskTitle: string | null
   cost: number
 }
@@ -26,6 +27,30 @@ function hrs(mins: number) {
 function money(n: number) {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+// Local (Melbourne) YYYY-MM-DD — built from local parts, never toISOString(), which
+// would shift the day for a UTC+10 browser.
+function localYmd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function dayKey(iso: string) {
+  return localYmd(new Date(iso))
+}
+function weekStartKey(iso: string) {
+  const d = new Date(iso)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)) // back to Monday
+  return localYmd(d)
+}
+function fmtDayLabel(key: string) {
+  return new Date(key + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+function fmtWeekLabel(key: string) {
+  const start = new Date(key + 'T00:00:00')
+  const end = new Date(start); end.setDate(end.getDate() + 6)
+  const f = (d: Date) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  return `${f(start)} – ${f(end)}`
+}
+
+type Grain = 'totals' | 'daily' | 'weekly'
 
 export default function Timesheet({
   entries, users, companies, projects, period,
@@ -40,6 +65,7 @@ export default function Timesheet({
   const [companyId, setCompanyId] = useState('')
   const [projectId, setProjectId] = useState('')
   const [billable, setBillable] = useState('') // '', 'billable', 'internal'
+  const [grain, setGrain] = useState<Grain>('totals')
 
   const filtered = useMemo(() => entries.filter(e => {
     if (userId && e.userId !== userId) return false
@@ -60,16 +86,47 @@ export default function Timesheet({
     return { mins, billMins, internalMins: mins - billMins, cost }
   }, [filtered])
 
-  const byPerson = useMemo(() => {
-    const m = new Map<string, { mins: number; billMins: number; cost: number }>()
+  // Per-person: month totals, or a per-day / per-week breakdown.
+  const perPerson = useMemo(() => {
+    type Row = { userName: string; periodKey: string; periodLabel: string; mins: number; billMins: number; cost: number }
+    const m = new Map<string, Row>()
     for (const e of filtered) {
-      const cur = m.get(e.userName) ?? { mins: 0, billMins: 0, cost: 0 }
+      const pKey = grain === 'daily' ? dayKey(e.loggedAt) : grain === 'weekly' ? weekStartKey(e.loggedAt) : ''
+      const key = `${e.userName}||${pKey}`
+      const cur = m.get(key) ?? {
+        userName: e.userName,
+        periodKey: pKey,
+        periodLabel: grain === 'daily' ? fmtDayLabel(pKey) : grain === 'weekly' ? fmtWeekLabel(pKey) : '',
+        mins: 0, billMins: 0, cost: 0,
+      }
       cur.mins += e.minutes
       if (e.isBillable) cur.billMins += e.minutes
       cur.cost += e.cost
-      m.set(e.userName, cur)
+      m.set(key, cur)
     }
-    return [...m].sort((a, b) => b[1].mins - a[1].mins)
+    const rows = [...m.values()]
+    // Sort by person, then most-recent period first.
+    rows.sort((a, b) => a.userName.localeCompare(b.userName) || b.periodKey.localeCompare(a.periodKey))
+    return rows
+  }, [filtered, grain])
+
+  // Total time per task (all timer events for a task added together).
+  const byTask = useMemo(() => {
+    type Row = { key: string; task: string; project: string | null; mins: number; billMins: number }
+    const m = new Map<string, Row>()
+    for (const e of filtered) {
+      const key = e.taskId ?? (e.projectId ? `notask:${e.projectId}` : 'unassigned')
+      const cur = m.get(key) ?? {
+        key,
+        task: e.taskTitle ?? 'Project work (no task)',
+        project: e.projectName,
+        mins: 0, billMins: 0,
+      }
+      cur.mins += e.minutes
+      if (e.isBillable) cur.billMins += e.minutes
+      m.set(key, cur)
+    }
+    return [...m.values()].sort((a, b) => b.mins - a.mins)
   }, [filtered])
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
@@ -130,17 +187,50 @@ export default function Timesheet({
         <span className="text-xs text-gray-400 ml-1">{filtered.length} entr{filtered.length === 1 ? 'y' : 'ies'}</span>
       </div>
 
-      {/* By person */}
-      {byPerson.length > 0 && (
+      {/* By person — with a Totals / Daily / Weekly view toggle */}
+      {filtered.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By person</div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">By person</div>
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+              {(['totals', 'daily', 'weekly'] as Grain[]).map(g => (
+                <button
+                  key={g}
+                  onClick={() => setGrain(g)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize transition ${
+                    grain === g ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {g === 'totals' ? 'Month total' : g}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-col gap-1.5">
-            {byPerson.map(([name, v]) => (
-              <div key={name} className="flex items-center gap-3 text-sm">
-                <span className="text-gray-800 w-40">{name}</span>
-                <span className="text-gray-700 w-20 text-right">{hrs(v.mins)}</span>
-                <span className="text-green-700 w-24 text-right text-xs">{hrs(v.billMins)} billable</span>
-                <span className="text-gray-500 w-24 text-right text-xs">{money(v.cost)} cost</span>
+            {perPerson.map(r => (
+              <div key={`${r.userName}||${r.periodKey}`} className="flex items-center gap-3 text-sm">
+                <span className="text-gray-800 w-40 truncate">{r.userName}</span>
+                {grain !== 'totals' && <span className="text-gray-500 w-32 text-xs">{r.periodLabel}</span>}
+                <span className="text-gray-700 w-20 text-right">{hrs(r.mins)}</span>
+                <span className="text-green-700 w-24 text-right text-xs">{hrs(r.billMins)} billable</span>
+                <span className="text-gray-500 w-24 text-right text-xs">{money(r.cost)} cost</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* By task — every timer for a task added together */}
+      {byTask.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">By task (total time each)</div>
+          <div className="flex flex-col gap-1.5">
+            {byTask.map(r => (
+              <div key={r.key} className="flex items-center gap-3 text-sm">
+                <span className="text-gray-800 flex-1 truncate" title={r.task}>{r.task}</span>
+                {r.project && <span className="text-gray-400 w-40 text-xs truncate">{r.project}</span>}
+                <span className="text-gray-800 w-20 text-right font-medium">{hrs(r.mins)}</span>
+                <span className="text-green-700 w-24 text-right text-xs">{hrs(r.billMins)} billable</span>
               </div>
             ))}
           </div>

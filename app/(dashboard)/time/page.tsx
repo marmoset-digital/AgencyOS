@@ -77,6 +77,7 @@ export default async function TimePage({
       projectName: rec.project?.name ?? null,
       companyId: rec.project?.company?.id ?? null,
       companyName: rec.project?.company?.name ?? null,
+      taskId: rec.task?.id ?? null,
       taskTitle: rec.task?.title ?? null,
       cost: Math.round(((rec.duration_minutes ?? 0) / 60) * rate * 100) / 100,
     }
