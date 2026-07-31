@@ -26,10 +26,13 @@ interface Person { id: string; full_name: string; role?: string | null }
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ task?: string }>
 }) {
   const { id } = await params
+  const { task: taskParam } = await searchParams
   const supabase = await createClient()
 
   // ── Wave 0: mutually independent ─────────────────────────────────────────
@@ -297,6 +300,7 @@ export default async function ProjectDetailPage({
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Tasks</h2>
         <TaskBoard
           tasks={(tasks ?? []) as never}
+          initialTaskId={taskParam}
           projectId={id}
           companyId={project.company_id}
           users={assigneeList as never}

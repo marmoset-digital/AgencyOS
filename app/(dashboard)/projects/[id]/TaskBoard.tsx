@@ -27,6 +27,7 @@ type TaskStatus = 'todo' | 'in_progress' | 'done'
 
 interface Props {
   tasks: Task[]
+  initialTaskId?: string
   projectId: string
   companyId: string
   users: User[]
@@ -190,6 +191,13 @@ function TaskDetailPanel({
 
   return (
     <div className="bg-gray-50 border-t border-gray-100 px-6 py-4 space-y-5">
+      {/* Full description */}
+      {task.description && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Description</div>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">{task.description}</p>
+        </div>
+      )}
       {/* Client approval */}
       {(requiresApproval || approvals.length > 0) && (
         <div>
@@ -386,17 +394,24 @@ function TaskDetailPanel({
   )
 }
 
-export default function TaskBoard({ tasks: initialTasks, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask, commentsByTask, currentUserId, contacts, approvalsByTask, projectLinks }: Props) {
+export default function TaskBoard({ tasks: initialTasks, initialTaskId, projectId, companyId, users, minutesByTask, activeTimer, subtasksByTask, commentsByTask, currentUserId, contacts, approvalsByTask, projectLinks }: Props) {
   const [view, setView] = useState<'list' | 'kanban'>('list')
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [showAddForm, setShowAddForm] = useState(false)
   const [showLogForm, setShowLogForm] = useState(false)
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(initialTaskId ?? null)
   const [isPending, startTransition] = useTransition()
 
   // Keep the local task list in sync when the server sends fresh data
   // (e.g. after adding a task, which revalidates the page).
   useEffect(() => { setTasks(initialTasks) }, [initialTasks])
+
+  // Deep-link: if arrived via ?task=, scroll that task's row into view.
+  useEffect(() => {
+    if (!initialTaskId) return
+    const el = document.getElementById(`task-row-${initialTaskId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [initialTaskId])
 
   function handleStatusChange(taskId: string, newStatus: TaskStatus) {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
@@ -587,7 +602,7 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                   const badge = approvalBadge(requiresApproval(task), approvalsFor(task.id))
                   return (
                     <Fragment key={task.id}>
-                      <tr className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition group">
+                      <tr id={`task-row-${task.id}`} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition group">
                         <td className="px-5 py-3.5">
                           <input
                             type="checkbox"
