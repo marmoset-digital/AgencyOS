@@ -20,11 +20,12 @@ const stageLabels: Record<string, string> = Object.fromEntries(
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ stage?: string; type?: string; q?: string; archived?: string }>
+  searchParams: Promise<{ stage?: string; type?: string; q?: string; archived?: string; sort?: string; dir?: string }>
 }) {
   const supabase = await createClient()
-  const { stage, type, q, archived } = await searchParams
+  const { stage, type, q, archived, sort, dir } = await searchParams
   const showArchived = archived === '1'
+  const sortDir = dir === 'desc' ? 'desc' : 'asc'
 
   let query = supabase
     .from('projects')
@@ -43,6 +44,42 @@ export default async function ProjectsPage({
   if (q) query = query.ilike('name', `%${q}%`)
 
   const { data: projects } = await query
+
+  // ── Sortable columns (URL-based). In-memory so joined Client/Assigned sort too. ──
+  const STAGE_ORDER: Record<string, number> = Object.fromEntries(PROJECT_STAGES.map((s, i) => [s.value, i]))
+  const rows = [...((projects ?? []) as Record<string, any>[])]
+  if (sort) {
+    const sign = sortDir === 'asc' ? 1 : -1
+    rows.sort((a, b) => {
+      switch (sort) {
+        case 'name': return String(a.name ?? '').localeCompare(String(b.name ?? '')) * sign
+        case 'client': return String(a.companies?.name ?? '').localeCompare(String(b.companies?.name ?? '')) * sign
+        case 'stage': return ((STAGE_ORDER[a.stage] ?? 99) - (STAGE_ORDER[b.stage] ?? 99)) * sign
+        case 'type': return String(a.type ?? '').localeCompare(String(b.type ?? '')) * sign
+        case 'assigned': return String(a.assigned_user?.full_name ?? '').localeCompare(String(b.assigned_user?.full_name ?? '')) * sign
+        case 'due': {
+          const da = a.end_date, db = b.end_date
+          if (!da && !db) return 0
+          if (!da) return 1
+          if (!db) return -1
+          return String(da).localeCompare(String(db)) * sign
+        }
+        default: return 0
+      }
+    })
+  }
+
+  function sortHref(key: string) {
+    const p = new URLSearchParams()
+    if (stage) p.set('stage', stage)
+    if (type) p.set('type', type)
+    if (q) p.set('q', q)
+    if (showArchived) p.set('archived', '1')
+    p.set('sort', key)
+    p.set('dir', sort === key && sortDir === 'asc' ? 'desc' : 'asc')
+    return `/projects?${p.toString()}`
+  }
+  const sortArrow = (key: string) => (sort === key ? (sortDir === 'asc' ? '↑' : '↓') : '↕')
 
   const { data: stageCounts } = await supabase
     .from('projects')
@@ -143,17 +180,17 @@ export default async function ProjectsPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-5 py-3 font-medium text-gray-500">Project</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-500">Client</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-500">Stage</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-500">Type</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-500">Due</th>
-                <th className="text-left px-5 py-3 font-medium text-gray-500">Assigned</th>
+                <th className="text-left px-5 py-3 font-medium text-gray-500"><Link href={sortHref('name')} className="inline-flex items-center gap-1 hover:text-gray-700">Project <span className="text-gray-300">{sortArrow('name')}</span></Link></th>
+                <th className="text-left px-5 py-3 font-medium text-gray-500"><Link href={sortHref('client')} className="inline-flex items-center gap-1 hover:text-gray-700">Client <span className="text-gray-300">{sortArrow('client')}</span></Link></th>
+                <th className="text-left px-5 py-3 font-medium text-gray-500"><Link href={sortHref('stage')} className="inline-flex items-center gap-1 hover:text-gray-700">Stage <span className="text-gray-300">{sortArrow('stage')}</span></Link></th>
+                <th className="text-left px-5 py-3 font-medium text-gray-500"><Link href={sortHref('type')} className="inline-flex items-center gap-1 hover:text-gray-700">Type <span className="text-gray-300">{sortArrow('type')}</span></Link></th>
+                <th className="text-left px-5 py-3 font-medium text-gray-500"><Link href={sortHref('due')} className="inline-flex items-center gap-1 hover:text-gray-700">Due <span className="text-gray-300">{sortArrow('due')}</span></Link></th>
+                <th className="text-left px-5 py-3 font-medium text-gray-500"><Link href={sortHref('assigned')} className="inline-flex items-center gap-1 hover:text-gray-700">Assigned <span className="text-gray-300">{sortArrow('assigned')}</span></Link></th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {projects.map((project: any) => (
+              {rows.map((project: any) => (
                 <tr key={project.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                   <td className="px-5 py-4">
                     <Link href={`/projects/${project.id}`} className="font-medium text-gray-900 hover:text-[#254DA5]">{project.name}</Link>
