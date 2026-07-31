@@ -158,8 +158,8 @@ export default function GlobalTasks({
                   <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                     <td className="px-5 py-3.5">
                       {t.project_id
-                        ? <Link href={`/projects/${t.project_id}`} className={`font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 hover:text-[#E8611A]'}`}>{t.title}</Link>
-                        : <span className={`font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</span>}
+                        ? <Link href={`/projects/${t.project_id}`} className={`text-[15px] font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 hover:text-[#E8611A]'}`}>{t.title}</Link>
+                        : <span className={`text-[15px] font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</span>}
                     </td>
                     <td className="px-4 py-3.5">
                       {t.project_id

@@ -222,7 +222,7 @@ function TaskDetailPanel({
                 onChange={() => startT(async () => { await toggleSubtask(s.id, !s.completed, projectId) })}
                 className="w-4 h-4 rounded accent-[#E8611A] cursor-pointer"
               />
-              <span className={`text-sm ${s.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>{s.title}</span>
+              <span className={`text-[15px] ${s.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>{s.title}</span>
               <button
                 onClick={() => startT(async () => { await deleteSubtask(s.id, projectId) })}
                 className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover/st:opacity-100 transition ml-1"
@@ -607,10 +607,10 @@ export default function TaskBoard({ tasks: initialTasks, projectId, companyId, u
                             </button>
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</span>
+                                <span className={`text-[15px] font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</span>
                                 {badge && <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>}
                               </div>
-                              {task.description && <div className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{task.description}</div>}
+                              {task.description && <div className="text-sm text-gray-500 mt-0.5 truncate max-w-sm">{task.description}</div>}
                             </div>
                           </div>
                         </td>
