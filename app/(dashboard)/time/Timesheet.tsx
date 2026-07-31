@@ -147,9 +147,9 @@ export default function Timesheet({
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
           <span className="text-xs text-gray-400">Custom range</span>
-          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="input text-sm" />
+          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="input text-sm w-40" />
           <span className="text-gray-400 text-sm">→</span>
-          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="input text-sm" />
+          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="input text-sm w-40" />
           <button onClick={applyCustom} className="rounded-lg px-3 py-1.5 text-sm bg-gray-900 text-white hover:bg-gray-800">Apply</button>
         </div>
       </div>
