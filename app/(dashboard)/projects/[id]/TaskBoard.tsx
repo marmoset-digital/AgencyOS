@@ -10,6 +10,8 @@ import type { Task, User } from '@/types'
 import type { ActiveTimer } from '@/types/time'
 import type { Subtask } from '@/types/subtask'
 import type { TaskComment } from '@/types/comment'
+import SortableTh from '@/components/SortableTh'
+import { sortTasks, nextSort, type SortKey, type SortState } from '@/lib/taskSort'
 
 const PRIORITY_COLOURS: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -400,6 +402,8 @@ export default function TaskBoard({ tasks: initialTasks, initialTaskId, projectI
   const [showAddForm, setShowAddForm] = useState(false)
   const [showLogForm, setShowLogForm] = useState(false)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(initialTaskId ?? null)
+  const [sort, setSort] = useState<SortState>(null)
+  const onSort = (k: SortKey) => setSort(s => nextSort(s, k))
   const [isPending, startTransition] = useTransition()
 
   // Keep the local task list in sync when the server sends fresh data
@@ -584,17 +588,17 @@ export default function TaskBoard({ tasks: initialTasks, initialTaskId, projectI
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="text-left px-5 py-3 font-medium text-gray-500 w-8"></th>
-                  <th className="text-left px-5 py-3 font-medium text-gray-500">Task</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Priority</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Assignee</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Due</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Time</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
+                  <SortableTh label="Task" sortKey="title" sort={sort} onSort={onSort} className="text-left px-5 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Priority" sortKey="priority" sort={sort} onSort={onSort} className="text-left px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} className="text-left px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Due" sortKey="due" sort={sort} onSort={onSort} className="text-left px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Time" sortKey="time" sort={sort} onSort={onSort} className="text-left px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Status" sortKey="status" sort={sort} onSort={onSort} className="text-left px-4 py-3 font-medium text-gray-500" />
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
-                {tasks.map(task => {
+                {sortTasks(tasks, sort, t => ({ title: t.title ?? '', priority: t.priority ?? 'medium', assignee: ((t as unknown as { assignee?: { full_name?: string } }).assignee?.full_name) ?? '', due: t.due_date ?? null, minutes: minutesByTask[t.id] ?? 0, status: t.status ?? 'todo' })).map(task => {
                   const subs = subtasksByTask[task.id] ?? []
                   const prog = subtaskProgress(subs)
                   const cCount = commentCount(task.id)

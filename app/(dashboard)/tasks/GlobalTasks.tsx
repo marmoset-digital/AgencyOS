@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { updateTaskStatus } from '@/app/actions/projects'
 import NewStandaloneTask from '@/components/NewStandaloneTask'
+import SortableTh from '@/components/SortableTh'
+import { sortTasks, nextSort, type SortKey, type SortState } from '@/lib/taskSort'
 
 interface GTask {
   id: string
@@ -65,6 +67,8 @@ export default function GlobalTasks({
   const [assigneeId, setAssigneeId] = useState('')
   const [status, setStatus] = useState('active') // active = not done
   const [priority, setPriority] = useState('')
+  const [sort, setSort] = useState<SortState>(null)
+  const onSort = (k: SortKey) => setSort(s => nextSort(s, k))
 
   function handleStatusChange(taskId: string, newStatus: TaskStatus) {
     const t = tasks.find(x => x.id === taskId)
@@ -144,17 +148,17 @@ export default function GlobalTasks({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-left">
-                  <th className="px-5 py-3 font-medium text-gray-500">Task</th>
+                  <SortableTh label="Task" sortKey="title" sort={sort} onSort={onSort} className="px-5 py-3 font-medium text-gray-500" />
                   <th className="px-4 py-3 font-medium text-gray-500">Project / Client</th>
-                  <th className="px-4 py-3 font-medium text-gray-500">Priority</th>
-                  <th className="px-4 py-3 font-medium text-gray-500">Assignee</th>
-                  <th className="px-4 py-3 font-medium text-gray-500">Due</th>
-                  <th className="px-4 py-3 font-medium text-gray-500">Time</th>
-                  <th className="px-4 py-3 font-medium text-gray-500">Status</th>
+                  <SortableTh label="Priority" sortKey="priority" sort={sort} onSort={onSort} className="px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Assignee" sortKey="assignee" sort={sort} onSort={onSort} className="px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Due" sortKey="due" sort={sort} onSort={onSort} className="px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Time" sortKey="time" sort={sort} onSort={onSort} className="px-4 py-3 font-medium text-gray-500" />
+                  <SortableTh label="Status" sortKey="status" sort={sort} onSort={onSort} className="px-4 py-3 font-medium text-gray-500" />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(t => (
+                {sortTasks(filtered, sort, t => ({ title: t.title, priority: t.priority, assignee: t.assignee?.full_name ?? '', due: t.due_date, minutes: minutesByTask[t.id] ?? 0, status: t.status })).map(t => (
                   <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                     <td className="px-5 py-3.5">
                       {t.project_id
