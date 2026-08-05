@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { updateTaskStatus } from '@/app/actions/projects'
+import { updateTaskStatus, deleteTask } from '@/app/actions/projects'
 import NewStandaloneTask from '@/components/NewStandaloneTask'
 import SortableTh from '@/components/SortableTh'
 import { sortTasks, nextSort, type SortKey, type SortState } from '@/lib/taskSort'
@@ -77,6 +77,12 @@ export default function GlobalTasks({
     if (!t) return
     setTasks(prev => prev.map(x => x.id === taskId ? { ...x, status: newStatus } : x))
     startTransition(async () => { await updateTaskStatus(taskId, newStatus, t.project_id) })
+  }
+
+  function handleDelete(taskId: string) {
+    if (!confirm('Delete this task? This cannot be undone.')) return
+    setTasks(prev => prev.filter(x => x.id !== taskId))
+    startTransition(async () => { await deleteTask(taskId, '') })
   }
 
   const filtered = useMemo(() => {
@@ -161,7 +167,7 @@ export default function GlobalTasks({
               </thead>
               <tbody>
                 {sortTasks(filtered, sort, t => ({ title: t.title, priority: t.priority, assignee: t.assignee?.full_name ?? '', due: t.due_date, minutes: minutesByTask[t.id] ?? 0, status: t.status })).map(t => (
-                  <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
+                  <tr key={t.id} className="group border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                     <td className="px-5 py-3.5">
                       {t.project_id
                         ? <Link href={`/projects/${t.project_id}?task=${t.id}`} className={`text-[15px] font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 hover:text-[#E8611A]'}`}>{t.title}</Link>
@@ -178,16 +184,28 @@ export default function GlobalTasks({
                     <td className="px-4 py-3.5">{formatDue(t.due_date)}</td>
                     <td className="px-4 py-3.5 text-xs text-gray-600">{fmtMins(minutesByTask[t.id] ?? 0)}</td>
                     <td className="px-4 py-3.5">
-                      <select
-                        value={['todo', 'in_progress', 'done'].includes(t.status) ? t.status : 'todo'}
-                        onChange={e => handleStatusChange(t.id, e.target.value as TaskStatus)}
-                        disabled={isPending}
-                        className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-[#E8611A]"
-                      >
-                        <option value="todo">To Do</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="done">Done</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={['todo', 'in_progress', 'done'].includes(t.status) ? t.status : 'todo'}
+                          onChange={e => handleStatusChange(t.id, e.target.value as TaskStatus)}
+                          disabled={isPending}
+                          className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-[#E8611A]"
+                        >
+                          <option value="todo">To Do</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="done">Done</option>
+                        </select>
+                        {!t.project_id && (
+                          <button
+                            onClick={() => handleDelete(t.id)}
+                            disabled={isPending}
+                            title="Delete task"
+                            className="text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -209,10 +227,20 @@ export default function GlobalTasks({
                   <div className="border-2 border-dashed border-gray-200 rounded-lg h-16 flex items-center justify-center text-xs text-gray-400">No tasks</div>
                 )}
                 {byStatus[col.key].map(t => (
-                  <div key={t.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition">
+                  <div key={t.id} className="group relative bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition">
+                    {!t.project_id && (
+                      <button
+                        onClick={() => handleDelete(t.id)}
+                        disabled={isPending}
+                        title="Delete task"
+                        className="absolute top-2 right-2 text-gray-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
+                      >
+                        ✕
+                      </button>
+                    )}
                     {t.project_id
-                      ? <Link href={`/projects/${t.project_id}?task=${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1">{t.title}</Link>
-                      : <Link href={`/tasks/${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1">{t.title}</Link>}
+                      ? <Link href={`/projects/${t.project_id}?task=${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1 pr-5">{t.title}</Link>
+                      : <Link href={`/tasks/${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1 pr-5">{t.title}</Link>}
                     <div className="text-[11px] text-gray-400 mb-2">{t.project ? `${t.project.name}${t.project.company ? ` · ${t.project.company.name}` : ''}` : 'Internal'}</div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[t.priority] ?? 'bg-gray-100 text-gray-600'}`}>{t.priority}</span>
