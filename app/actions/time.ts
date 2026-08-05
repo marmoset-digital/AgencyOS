@@ -5,6 +5,13 @@ import { revalidatePath } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ActiveTimer } from '@/types/time'
 
+// Revalidate the project board for project work, or the tasks views for
+// standalone (project-less) tasks.
+function revalidateFor(projectId: string | null) {
+  if (projectId) revalidatePath(`/projects/${projectId}`)
+  else revalidatePath('/tasks')
+}
+
 // Internal helper: write a running timer's elapsed time to time_logs and remove it.
 async function commitTimer(supabase: SupabaseClient, timer: ActiveTimer) {
   const startedMs = new Date(timer.started_at).getTime()
@@ -12,7 +19,7 @@ async function commitTimer(supabase: SupabaseClient, timer: ActiveTimer) {
 
   await supabase.from('time_logs').insert({
     task_id: timer.task_id ?? null,
-    project_id: timer.project_id,
+    project_id: timer.project_id ?? null,
     user_id: timer.user_id,
     duration_minutes: minutes,
     description: timer.description ?? null,
@@ -23,7 +30,8 @@ async function commitTimer(supabase: SupabaseClient, timer: ActiveTimer) {
 }
 
 // ── Start a timer on a task ─────────────────────────────────
-export async function startTimer(taskId: string, projectId: string) {
+// projectId is null for standalone (internal) tasks.
+export async function startTimer(taskId: string, projectId: string | null) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -40,15 +48,15 @@ export async function startTimer(taskId: string, projectId: string) {
   const { error } = await supabase.from('active_timers').insert({
     user_id: user.id,
     task_id: taskId,
-    project_id: projectId,
+    project_id: projectId ?? null,
   })
   if (error) return { error: error.message }
 
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
 
 // ── Stop the current user's running timer ───────────────────
-export async function stopTimer(projectId: string) {
+export async function stopTimer(projectId: string | null) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
@@ -62,17 +70,17 @@ export async function stopTimer(projectId: string) {
   if (!timer) return { error: 'No running timer' }
 
   await commitTimer(supabase, timer as ActiveTimer)
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
 
 // ── Discard the current user's running timer WITHOUT logging any time ─────────
 // For when you forgot to stop a timer and don't want the bogus elapsed time.
-export async function discardTimer(projectId: string) {
+export async function discardTimer(projectId: string | null) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
   await supabase.from('active_timers').delete().eq('user_id', user.id)
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
 
 // ── Log time manually ───────────────────────────────────────
@@ -81,7 +89,7 @@ export async function logTime(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  const projectId = formData.get('project_id') as string
+  const projectId = (formData.get('project_id') as string) || null
   const hours = parseInt((formData.get('hours') as string) || '0', 10) || 0
   const mins = parseInt((formData.get('minutes') as string) || '0', 10) || 0
   const duration = hours * 60 + mins
@@ -101,13 +109,13 @@ export async function logTime(formData: FormData) {
   const { error } = await supabase.from('time_logs').insert(payload)
   if (error) return { error: error.message }
 
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
 
 // ── Delete a time log ───────────────────────────────────────
-export async function deleteTimeLog(id: string, projectId: string) {
+export async function deleteTimeLog(id: string, projectId: string | null) {
   const supabase = await createClient()
   const { error } = await supabase.from('time_logs').delete().eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }

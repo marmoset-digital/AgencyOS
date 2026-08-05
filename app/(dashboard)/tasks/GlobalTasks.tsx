@@ -163,7 +163,7 @@ export default function GlobalTasks({
                     <td className="px-5 py-3.5">
                       {t.project_id
                         ? <Link href={`/projects/${t.project_id}?task=${t.id}`} className={`text-[15px] font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 hover:text-[#E8611A]'}`}>{t.title}</Link>
-                        : <span className={`text-[15px] font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900'}`}>{t.title}</span>}
+                        : <Link href={`/tasks/${t.id}`} className={`text-[15px] font-medium ${t.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 hover:text-[#E8611A]'}`}>{t.title}</Link>}
                     </td>
                     <td className="px-4 py-3.5">
                       {t.project_id
@@ -210,7 +210,7 @@ export default function GlobalTasks({
                   <div key={t.id} className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md transition">
                     {t.project_id
                       ? <Link href={`/projects/${t.project_id}?task=${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1">{t.title}</Link>
-                      : <span className="text-sm font-medium text-gray-900 leading-snug block mb-1">{t.title}</span>}
+                      : <Link href={`/tasks/${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#E8611A] leading-snug block mb-1">{t.title}</Link>}
                     <div className="text-[11px] text-gray-400 mb-2">{t.project ? `${t.project.name}${t.project.company ? ` · ${t.project.company.name}` : ''}` : 'Internal'}</div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLOURS[t.priority] ?? 'bg-gray-100 text-gray-600'}`}>{t.priority}</span>

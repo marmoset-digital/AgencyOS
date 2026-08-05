@@ -3,6 +3,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// Revalidate the project board for project work, or the tasks views for
+// standalone (project-less) tasks.
+function revalidateFor(projectId: string | null) {
+  if (projectId) revalidatePath(`/projects/${projectId}`)
+  else revalidatePath('/tasks')
+}
+
 // ── Create a standalone (internal) task — no project, no client ──────────
 export async function createStandaloneTask(formData: FormData): Promise<{ ok?: true; error?: string }> {
   const supabase = await createClient()
@@ -27,7 +34,8 @@ export async function createStandaloneTask(formData: FormData): Promise<{ ok?: t
 }
 
 // ── Edit an existing task (inline; revalidates, no redirect) ─────────────
-export async function editTask(taskId: string, projectId: string, formData: FormData) {
+// projectId is null for standalone (internal) tasks.
+export async function editTask(taskId: string, projectId: string | null, formData: FormData) {
   const supabase = await createClient()
 
   const payload = {
@@ -46,11 +54,11 @@ export async function editTask(taskId: string, projectId: string, formData: Form
   const { error } = await supabase.from('tasks').update(payload).eq('id', taskId)
   if (error) return { error: error.message }
 
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
 
 // ── Subtasks ────────────────────────────────────────────────────────────
-export async function addSubtask(taskId: string, projectId: string, title: string) {
+export async function addSubtask(taskId: string, projectId: string | null, title: string) {
   const supabase = await createClient()
   const clean = (title ?? '').trim()
   if (!clean) return { error: 'Subtask title is required' }
@@ -58,19 +66,19 @@ export async function addSubtask(taskId: string, projectId: string, title: strin
   const { error } = await supabase.from('subtasks').insert({ task_id: taskId, title: clean })
   if (error) return { error: error.message }
 
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
 
-export async function toggleSubtask(id: string, completed: boolean, projectId: string) {
+export async function toggleSubtask(id: string, completed: boolean, projectId: string | null) {
   const supabase = await createClient()
   const { error } = await supabase.from('subtasks').update({ completed }).eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
 
-export async function deleteSubtask(id: string, projectId: string) {
+export async function deleteSubtask(id: string, projectId: string | null) {
   const supabase = await createClient()
   const { error } = await supabase.from('subtasks').delete().eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath(`/projects/${projectId}`)
+  revalidateFor(projectId)
 }
