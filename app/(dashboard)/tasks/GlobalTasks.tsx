@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { updateTaskStatus } from '@/app/actions/projects'
 import NewStandaloneTask from '@/components/NewStandaloneTask'
@@ -59,6 +59,8 @@ export default function GlobalTasks({
   currentUserId: string
 }) {
   const [tasks, setTasks] = useState<GTask[]>(initial)
+  // Sync when the server sends a fresh list (e.g. after creating a task and router.refresh()).
+  useEffect(() => { setTasks(initial) }, [initial])
   const [view, setView] = useState<'list' | 'board'>('list')
   const [isPending, startTransition] = useTransition()
 
