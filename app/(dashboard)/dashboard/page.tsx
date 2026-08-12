@@ -2,6 +2,7 @@ import ClientActivity from '@/components/ClientActivity'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { LIVE_STAGES, formatMoney } from '@/lib/clientContext'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -15,13 +16,37 @@ export default async function DashboardPage() {
     { count: overdueTasks },
     { data: recentProjects },
     { data: overdueInvoices },
+    { count: liveProjects },
+    { data: activeCharges },
+    { data: archivedCompanies },
+    { data: me },
   ] = await Promise.all([
     supabase.from('projects').select('*', { count: 'exact', head: true }).in('stage', ['active', 'onboarding', 'awaiting_feedback']).is('archived_at', null),
     supabase.from('support_tickets').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
     supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'todo').lt('due_date', new Date().toISOString().split('T')[0]),
     supabase.from('projects').select('id, name, stage, companies(name)').in('stage', ['active', 'onboarding', 'awaiting_feedback']).is('archived_at', null).order('updated_at', { ascending: false }).limit(5),
     supabase.from('invoices').select('id, invoice_number, amount, due_date, companies(name)').eq('status', 'overdue').order('due_date', { ascending: true }).limit(5),
+    // Revenue card: live (non-closed) project count + active recurring charges (archived clients filtered out below).
+    supabase.from('projects').select('*', { count: 'exact', head: true }).in('stage', LIVE_STAGES as unknown as string[]).is('archived_at', null),
+    supabase.from('recurring_charges').select('amount, cadence, company_id').eq('active', true),
+    supabase.from('companies').select('id').not('archived_at', 'is', null),
+    supabase.from('users').select('role').eq('id', user.id).single(),
   ])
+
+  // Revenue is admin-only — hidden from team members (e.g. Lewis). Gated server-side,
+  // so the figures never reach a non-admin's page.
+  const isAdmin = me?.role === 'admin'
+
+  // Recurring revenue — exclude charges belonging to archived clients, then split by cadence.
+  const archivedIds = new Set((archivedCompanies ?? []).map((c: { id: string }) => c.id))
+  const liveCharges = (activeCharges ?? []).filter((c: { company_id: string }) => !archivedIds.has(c.company_id))
+  const monthlyRecurring = liveCharges
+    .filter((c: { cadence: string }) => c.cadence === 'monthly')
+    .reduce((s: number, c: { amount: number | string }) => s + Number(c.amount), 0)
+  const yearlyRecurring = liveCharges
+    .filter((c: { cadence: string }) => c.cadence === 'yearly')
+    .reduce((s: number, c: { amount: number | string }) => s + Number(c.amount), 0)
+  const annualisedRunRate = monthlyRecurring * 12 + yearlyRecurring
 
   const stageLabels: Record<string, string> = {
     quote_sent: 'Quote Sent',
@@ -75,6 +100,23 @@ export default async function DashboardPage() {
           href="/tasks"
         />
       </div>
+
+      {/* Revenue — admin-only */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Revenue</h2>
+            <span className="text-xs text-gray-400">Recurring charges on active clients · admin only</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            <RevenueFigure label="Monthly recurring" value={formatMoney(monthlyRecurring)} sub="/mo" accent />
+            <RevenueFigure label="Yearly recurring" value={formatMoney(yearlyRecurring)} sub="/yr" />
+            <RevenueFigure label="Annualised run-rate" value={formatMoney(annualisedRunRate)} sub="monthly×12 + yearly" />
+            <RevenueFigure label="Live projects" value={String(liveProjects ?? 0)} sub="all non-closed" href="/projects" />
+          </div>
+          <p className="text-[11px] text-gray-400 mt-4">Proposal pipeline will appear here once the Proposals module is built.</p>
+        </div>
+      )}
 
       {/* Recent client activity */}
       <div className="mb-8">
@@ -134,6 +176,23 @@ export default async function DashboardPage() {
       </div>
     </div>
   )
+}
+
+function RevenueFigure({ label, value, sub, accent, href }: {
+  label: string
+  value: string
+  sub?: string
+  accent?: boolean
+  href?: string
+}) {
+  const inner = (
+    <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-4 h-full">
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${accent ? 'text-[#E8611A]' : 'text-gray-900'}`}>{value}</p>
+      {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  )
+  return href ? <Link href={href} className="block transition hover:opacity-80">{inner}</Link> : inner
 }
 
 function MetricCard({ label, value, color, icon, href }: {
