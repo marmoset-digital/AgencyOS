@@ -244,3 +244,65 @@ export async function deleteProjectTemplate(id: string): Promise<Result> {
   revalidatePath('/projects/templates')
   return { ok: true }
 }
+
+// ── CSV import ────────────────────────────────────────────────────────────
+// The client parses + validates the CSV and resolves any name clashes, then
+// sends a plan here. Each item is either a create (no id) or a replace (id of an
+// existing template whose content is overwritten). Reuses the same normalisation
+// as saveTemplate. Returns a summary; a single bad item aborts before any write.
+export type ImportItem = {
+  id?: string | null // present => replace this existing template
+  name: string
+  description?: string | null
+  type?: string | null
+  tasks: TemplateTask[]
+}
+
+export async function importTemplates(
+  items: ImportItem[],
+): Promise<{ created: number; replaced: number; tasksCreated: number; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { created: 0, replaced: 0, tasksCreated: 0, error: 'Not signed in.' }
+
+  // Normalise + validate everything up front so we don't half-write.
+  const prepared = items.map(it => {
+    const name = (it.name ?? '').trim()
+    const tasks: TemplateTask[] = (it.tasks ?? [])
+      .map(t => ({
+        title: (t.title ?? '').trim(),
+        description: t.description?.trim() || null,
+        priority: PRIORITIES.includes(t.priority) ? t.priority : 'medium',
+        time_estimate: Number.isFinite(Number(t.time_estimate)) && Number(t.time_estimate) > 0 ? Math.round(Number(t.time_estimate)) : null,
+        due_offset_days: Number.isFinite(Number(t.due_offset_days)) ? Math.round(Number(t.due_offset_days)) : null,
+      }))
+      .filter(t => t.title)
+    return { id: it.id ?? null, name, description: it.description?.trim() || null, type: it.type ?? null, tasks }
+  })
+
+  if (prepared.some(p => !p.name)) return { created: 0, replaced: 0, tasksCreated: 0, error: 'A template is missing a name.' }
+  if (prepared.some(p => p.tasks.length === 0)) return { created: 0, replaced: 0, tasksCreated: 0, error: 'A template has no valid tasks.' }
+
+  let created = 0, replaced = 0, tasksCreated = 0
+  for (const p of prepared) {
+    const content: TemplateContent = { type: p.type, tasks: p.tasks }
+    if (p.id) {
+      const { error } = await supabase
+        .from('project_templates')
+        .update({ name: p.name, description: p.description, content, updated_at: new Date().toISOString() })
+        .eq('id', p.id)
+      if (error) return { created, replaced, tasksCreated, error: error.message }
+      replaced++
+    } else {
+      const { error } = await supabase
+        .from('project_templates')
+        .insert({ name: p.name, description: p.description, content, created_by: user.id })
+      if (error) return { created, replaced, tasksCreated, error: error.message }
+      created++
+    }
+    tasksCreated += p.tasks.length
+  }
+
+  revalidatePath('/projects/templates')
+  return { created, replaced, tasksCreated }
+}

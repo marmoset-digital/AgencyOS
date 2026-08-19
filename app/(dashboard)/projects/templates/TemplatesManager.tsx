@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveTemplate, deleteProjectTemplate } from '@/app/actions/projectTemplates'
 import TemplateTaskEditor, { type EditorRow, BLANK_ROW } from './TemplateTaskEditor'
+import TemplatesImport from './TemplatesImport'
 
 export type ManagerTemplate = {
   id: string
@@ -31,7 +32,8 @@ export default function TemplatesManager({ templates }: { templates: ManagerTemp
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end items-center gap-2">
+        <TemplatesImport existing={templates.map(t => ({ id: t.id, name: t.name }))} />
         <button
           onClick={() => setCreating(c => !c)}
           className="bg-[#254DA5] hover:bg-[#1E3D84] text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
