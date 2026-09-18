@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { normaliseContent, computeTotals, summaryText, headlineValue, money } from '@/lib/proposalPricing'
+import type { ProposalTotals } from '@/lib/proposalPricing'
 
 // Status presentation, kept in step with the DB check constraint (migration 0013):
 // draft | sent | accepted | declined | changes_requested | expired
@@ -40,7 +41,15 @@ export default async function ProposalsPage({
     .order('created_at', { ascending: false })
 
   const now = Date.now()
-  const all = ((proposals ?? []) as Record<string, any>[]).map(p => {
+  // Object spread drops the index signature from Record<string, any>, so the row
+  // type is declared here. Without it every p.status / p.title read fails to compile.
+  type Row = Record<string, any> & {
+    totals: ProposalTotals
+    summary: string
+    value: number
+    lapsed: boolean
+  }
+  const all: Row[] = ((proposals ?? []) as Record<string, any>[]).map(p => {
     const totals = computeTotals(normaliseContent(p.content))
     return {
       ...p,
