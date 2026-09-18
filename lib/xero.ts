@@ -375,3 +375,35 @@ export async function createXeroContact(c: NewXeroContact): Promise<{ ContactID:
   if (!created?.ContactID) throw new Error('Xero did not return a created contact.')
   return { ContactID: created.ContactID, Name: created.Name ?? c.name }
 }
+
+// Update an existing Xero contact by ContactID. Only sends fields that are set;
+// omitted fields are left unchanged in Xero (non-destructive — we sync changes,
+// we don't clear).
+export async function updateXeroContact(contactId: string, c: NewXeroContact): Promise<void> {
+  const { accessToken, tenantId } = await getValidAccess()
+  const contact: Record<string, unknown> = { ContactID: contactId, Name: c.name }
+  if (c.firstName) contact.FirstName = c.firstName
+  if (c.lastName) contact.LastName = c.lastName
+  if (c.email) contact.EmailAddress = c.email
+  if (c.phone) contact.Phones = [{ PhoneType: 'DEFAULT', PhoneNumber: c.phone }]
+  const res = await fetch(`${API_BASE}/Contacts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Xero-tenant-id': tenantId,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ Contacts: [contact] }),
+  })
+  if (!res.ok) throw new Error(`Xero update contact failed (${res.status}): ${await res.text()}`)
+}
+
+// Find an existing Xero contact by exact name — used to dedupe when a create is
+// rejected because the name is already taken.
+export async function findXeroContactByName(name: string): Promise<{ ContactID: string; Name: string } | null> {
+  const safe = name.replace(/"/g, '')
+  const data = await apiGet(`/Contacts?where=${encodeURIComponent(`Name=="${safe}"`)}`)
+  const match = (data.Contacts as Array<{ ContactID?: string; Name?: string }> | undefined)?.[0]
+  return match?.ContactID ? { ContactID: match.ContactID, Name: match.Name ?? name } : null
+}

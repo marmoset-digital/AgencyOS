@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { pushCompanyToXero } from '@/app/actions/xero'
+import { pushCompanyToXero, syncCompanyToXero } from '@/app/actions/xero'
 import { revalidatePath } from 'next/cache'
 
 // ── Archive / restore ─────────────────────────────────────────────
@@ -91,6 +91,9 @@ export async function updateCompany(id: string, formData: FormData) {
   const { error } = await supabase.from('companies').update(payload).eq('id', id)
 
   if (error) return { error: error.message }
+
+  // Keep the linked Xero contact's name in step (best-effort).
+  await syncCompanyToXero(id)
 
   redirect(`/clients/${id}`)
 }
@@ -343,6 +346,7 @@ export async function createContact(companyId: string, formData: FormData) {
   const { error } = await supabase.from('contacts').insert(payload as any)
   if (error) return { error: error.message }
 
+  await syncCompanyToXero(companyId)
   revalidatePath(`/clients/${companyId}`)
   redirect(`/clients/${companyId}`)
 }
@@ -366,6 +370,7 @@ export async function updateContact(contactId: string, companyId: string, formDa
   const { error } = await supabase.from('contacts').update(payload).eq('id', contactId)
   if (error) return { error: error.message }
 
+  await syncCompanyToXero(companyId)
   revalidatePath(`/clients/${companyId}`)
   redirect(`/clients/${companyId}`)
 }
@@ -376,5 +381,6 @@ export async function deleteContact(contactId: string, companyId: string) {
   const { error } = await supabase.from('contacts').delete().eq('id', contactId)
   if (error) return { error: error.message }
 
+  await syncCompanyToXero(companyId)
   revalidatePath(`/clients/${companyId}`)
 }
