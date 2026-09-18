@@ -8,6 +8,7 @@ import type { User } from '@/types'
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: '⊞' },
   { href: '/clients', label: 'Clients & CRM', icon: '🏢' },
+  { href: '/proposals', label: 'Proposals', icon: '📄' },
   { href: '/projects', label: 'Projects', icon: '📁' },
   { href: '/tasks', label: 'Tasks', icon: '✓' },
   { href: '/time', label: 'Time Tracking', icon: '⏱' },
