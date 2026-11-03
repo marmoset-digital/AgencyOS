@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // The event vocabulary. Add the string here BEFORE emitting it: a typo in a
 // type is a workflow that silently never fires, and nothing will tell you.
 export const EVENT_TYPES = [
+  'enquiry.received',
   'client.created',
   'proposal.sent',
   'proposal.accepted',
