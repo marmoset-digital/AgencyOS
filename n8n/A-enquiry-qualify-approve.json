@@ -1,0 +1,502 @@
+{
+  "name": "Enquiry - qualify and approve (A)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c3846460-05ca-4edd-bff4-4cc333524c4f",
+      "name": "Enquiry event",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ba5f0436-ede5-4448-9481-dcedc79cb2d6",
+              "name": "MODEL",
+              "value": "anthropic/claude-haiku-5.5",
+              "type": "string"
+            },
+            {
+              "id": "a778db3c-d4f9-4c53-89d9-2e5400cc2770",
+              "name": "AGENCY_OS",
+              "value": "https://app.marmoset.com.au",
+              "type": "string"
+            },
+            {
+              "id": "cbe1aa93-ef7f-4734-b356-b45edf47149b",
+              "name": "APPROVER",
+              "value": "admin@marmoset.com.au",
+              "type": "string"
+            },
+            {
+              "id": "61d125fb-7b97-4b1d-a322-acd3874970cf",
+              "name": "FROM",
+              "value": "Marmoset Agency OS <support@marmoset.com.au>",
+              "type": "string"
+            },
+            {
+              "id": "2fec03c7-e142-4527-8f8f-232a755879f2",
+              "name": "TEMPLATE",
+              "value": "Paid Discovery",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bd87302d-bf7b-47cf-b867-bb123f0edb78",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the OpenRouter request. EDIT THE CRITERIA BELOW to change what \"good fit\" means.\nconst s = $input.first().json;            // Settings + the Agency OS event\nconst e = (s.event && s.event.payload) || {};\n\nconst system = `You triage new enquiries for Marmoset Digital Media, a digital marketing agency in Melbourne, Australia.\nMarmoset's main offer is a $800 + GST \"Paid Discovery\": a 3-hour strategy session plus a written monthly marketing plan. It usually leads to a $3,000/month done-for-you marketing program.\n\nGOOD FIT: an established Australian business (or one clearly ready to invest) wanting ongoing help with digital marketing, websites, SEO, social media or online strategy.\nPOOR FIT: tiny one-off jobs, no budget, students, job or internship seekers, requests outside marketing, businesses well outside Australia.\nSPAM: sales pitches TO Marmoset (SEO, link building, web design, offshore development, lead lists), automated or nonsense messages, crypto, anything that is not a real enquiry.\n\nReply with JSON only, no other text:\n{\"verdict\":\"good_fit\"|\"poor_fit\"|\"spam\",\"summary\":\"two short sentences for the agency owner\",\"reason\":\"one short phrase\"}`;\n\nconst user = [\n  `Name: ${[e.first_name, e.last_name].filter(Boolean).join(' ') || '(not given)'}`,\n  `Email: ${e.email || '(not given)'}`,\n  `Phone: ${e.phone || '(not given)'}`,\n  `Business: ${e.company_name || '(not given)'}`,\n  `Website: ${e.website || '(not given)'}`,\n  `Interested in: ${e.service_interest || '(not given)'}`,\n  `Existing client: ${e.company_id ? 'yes' : 'no'}`,\n  '',\n  'Message:',\n  e.message || '(empty)',\n].join('\\n');\n\nreturn [{ json: { ...s, request: {\n  model: s.MODEL,\n  temperature: 0,\n  max_tokens: 300,\n  response_format: { type: 'json_object' },\n  messages: [{ role: 'system', content: system }, { role: 'user', content: user }],\n} } }];"
+      },
+      "id": "fae3b1d8-a9eb-48f0-a91a-30a064af2e3b",
+      "name": "Build prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "87138fe4-3d05-4c54-a51a-d3c9fe77f6f9",
+      "name": "AI triage (OpenRouter)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns the AI reply into a verdict plus the approval email. Never fails: if the AI reply\n// cannot be read, the enquiry still goes to admin@ marked \"Not triaged\".\nconst s = $('Build prompt').first().json;\nconst e = (s.event && s.event.payload) || {};\n\nlet v = { verdict: 'unknown', summary: '', reason: '' };\ntry {\n  const txt = $input.first().json.choices[0].message.content;\n  const m = String(txt).match(/\\{[\\s\\S]*\\}/);\n  v = { ...v, ...JSON.parse(m ? m[0] : txt) };\n} catch (err) {\n  v.summary = 'AI triage failed. Please read the enquiry yourself.';\n}\nif (!['good_fit', 'poor_fit', 'spam'].includes(v.verdict)) v.verdict = 'unknown';\n\nconst esc = (x) => String(x ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst name = [e.first_name, e.last_name].filter(Boolean).join(' ') || e.email;\nconst label = { good_fit: 'Good fit', poor_fit: 'Poor fit', spam: 'Spam', unknown: 'Not triaged' }[v.verdict];\nconst who = e.company_name ? `${e.company_name} (${name})` : name;\nconst subject = (v.verdict === 'good_fit' ? 'New enquiry: ' : `New enquiry [${label}]: `) + who;\n\nconst row = (k, val) => val ? `<tr><td style=\"padding:2px 12px 2px 0;color:#666\">${k}</td><td>${esc(val)}</td></tr>` : '';\nconst html =\n  `<p><strong>AI verdict: ${label}</strong>${v.reason ? ` (${esc(v.reason)})` : ''}<br>${esc(v.summary)}</p>` +\n  (e.company_id ? `<p><em>This email matches an existing client in Agency OS.</em></p>` : '') +\n  `<table style=\"border-collapse:collapse\">` +\n  row('Name', name) + row('Email', e.email) + row('Phone', e.phone) + row('Business', e.company_name) +\n  row('Website', e.website) + row('Interested in', e.service_interest) +\n  `</table>` +\n  `<p style=\"white-space:pre-wrap;border-left:3px solid #ddd;padding-left:10px\">${esc(e.message || '(no message)')}</p>` +\n  `<p><strong>Approve</strong> creates the client in Agency OS and emails ${esc(e.email)} the ` +\n  `$800 Paid Discovery proposal. <strong>Decline</strong> sends nothing.</p>`;\n\nreturn [{ json: {\n  enquiry_id: e.enquiry_id || (s.event && s.event.entityId),\n  verdict: v.verdict, summary: v.summary, reason: v.reason, model: s.MODEL,\n  subject, html, name, email: e.email, company: e.company_name || null,\n  AGENCY_OS: s.AGENCY_OS, APPROVER: s.APPROVER, FROM: s.FROM, TEMPLATE: s.TEMPLATE,\n} }];"
+      },
+      "id": "f3aa3175-169c-4934-9788-df86497f9beb",
+      "name": "Read verdict",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.AGENCY_OS }}/api/automation/enquiries/{{ $json.enquiry_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: $json.verdict === 'spam' ? 'spam' : ($json.verdict === 'poor_fit' ? 'poor_fit' : undefined), ai_verdict: $json.verdict, ai_summary: $json.summary, ai_model: $json.model }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b5602178-aef7-4d02-aa1a-c307b122c2a6",
+      "name": "Record verdict",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e1a9032f-1265-4da5-964c-dca46cb7c9ce",
+              "leftValue": "={{ $('Read verdict').item.json.verdict }}",
+              "rightValue": "spam",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e8cdc96e-5159-4b7d-b886-f885b28b3f4a",
+      "name": "Spam?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "6e2acc86-e140-4809-8e1b-ec8fc4c6a487",
+      "name": "Ignore spam",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "fromEmail": "={{ $('Read verdict').item.json.FROM }}",
+        "toEmail": "={{ $('Read verdict').item.json.APPROVER }}",
+        "subject": "={{ $('Read verdict').item.json.subject }}",
+        "message": "={{ $('Read verdict').item.json.html }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve: send Paid Discovery proposal",
+            "disapproveLabel": "Decline"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": 30,
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "2bc7ff70-cb17-4d7f-91db-85524d54eec0",
+      "name": "Ask admin@",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1540,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0bcf4323-30d3-49b2-9efa-4ab0c1d357e3",
+              "leftValue": "={{ $json.data.approved }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ea6395e3-cb32-4452-b20d-aaa29a2c6b61",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Read verdict').item.json.AGENCY_OS }}/api/automation/proposals",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ enquiry_id: $('Read verdict').item.json.enquiry_id, template: $('Read verdict').item.json.TEMPLATE, decided_by: $('Read verdict').item.json.APPROVER }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "d0ebc1b3-a30e-42d4-bcb0-f11f00d9b09e",
+      "name": "Send proposal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Read verdict').item.json.FROM }}",
+        "toEmail": "={{ $('Read verdict').item.json.APPROVER }}",
+        "subject": "=Sent: {{ $('Read verdict').item.json.TEMPLATE }} proposal to {{ $('Read verdict').item.json.company || $('Read verdict').item.json.name }}",
+        "emailFormat": "html",
+        "html": "=<p>{{ $json.proposalNumber }} is on its way to {{ $('Read verdict').item.json.email }}{{ $json.emailed ? '' : ' (note: the email to the client did NOT send, so send the link yourself)' }}.</p><p><a href=\"{{ $json.url }}\">Client's proposal link</a> \u00b7 <a href=\"{{ $('Read verdict').item.json.AGENCY_OS }}/clients/{{ $json.companyId }}\">Open the client in Agency OS</a></p>",
+        "options": {}
+      },
+      "id": "961b3955-ab86-42a9-9cd9-39f4ad1bc6c0",
+      "name": "Confirm to admin@",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1f86bbea-0788-4de7-ba5a-312a1ab0cf36",
+              "leftValue": "={{ $json.data.approved }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5fc4f942-8110-4652-84c9-dbebaeea7019",
+      "name": "Declined?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('Read verdict').item.json.AGENCY_OS }}/api/automation/enquiries/{{ $('Read verdict').item.json.enquiry_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'declined', decided_by: $('Read verdict').item.json.APPROVER }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b917d49a-b83f-4f92-8f22-2c64e0b6adbd",
+      "name": "Mark declined",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d6031f7f-2d25-4e32-8a04-61e0bd2bab1a",
+      "name": "No answer (timed out)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        320
+      ]
+    }
+  ],
+  "connections": {
+    "Enquiry event": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Build prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build prompt": {
+      "main": [
+        [
+          {
+            "node": "AI triage (OpenRouter)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI triage (OpenRouter)": {
+      "main": [
+        [
+          {
+            "node": "Read verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read verdict": {
+      "main": [
+        [
+          {
+            "node": "Record verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record verdict": {
+      "main": [
+        [
+          {
+            "node": "Spam?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spam?": {
+      "main": [
+        [
+          {
+            "node": "Ignore spam",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask admin@",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask admin@": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Send proposal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Declined?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send proposal": {
+      "main": [
+        [
+          {
+            "node": "Confirm to admin@",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Declined?": {
+      "main": [
+        [
+          {
+            "node": "Mark declined",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No answer (timed out)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Australia/Melbourne"
+  },
+  "pinData": {}
+}

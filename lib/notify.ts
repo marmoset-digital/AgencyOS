@@ -14,24 +14,36 @@ const ENDPOINT = 'https://api.emailit.com/v2/emails'
 // Low-level send to a specific address via the Emailit HTTP API. Fire-and-forget:
 // never throws into the caller.
 export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+  await deliver(
+    to,
+    subject,
+    `${html}<p style="margin-top:16px;color:#888;font-size:12px">Marmoset Agency OS · <a href="${APP}/dashboard">${APP}/dashboard</a></p>`,
+  )
+}
+
+// Client-facing send: no internal dashboard footer (clients cannot log in to Agency OS).
+// Returns whether Emailit accepted it, so automation callers can report a failed send.
+// Still never throws.
+export async function sendClientEmail(to: string, subject: string, html: string): Promise<boolean> {
+  return deliver(to, subject, html)
+}
+
+async function deliver(to: string, subject: string, html: string): Promise<boolean> {
   try {
     const key = process.env.EMAILIT_API_KEY
-    if (!key) return // not configured — silently skip
-    await fetch(ENDPOINT, {
+    if (!key) return false // not configured — silently skip
+    const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: FROM,
-        to,
-        subject,
-        html: `${html}<p style="margin-top:16px;color:#888;font-size:12px">Marmoset Agency OS · <a href="${APP}/dashboard">${APP}/dashboard</a></p>`,
-      }),
+      body: JSON.stringify({ from: FROM, to, subject, html }),
     })
+    return res.ok
   } catch {
     // best-effort only — never surface to the caller
+    return false
   }
 }
 
@@ -42,10 +54,11 @@ export async function notifyTeam(subject: string, html: string): Promise<void> {
 
 // Convenience builder for the proposal-decision email.
 export function proposalDecisionEmail(who: string, accepted: boolean, companyId: string | null, comment?: string) {
+  // `who` and `comment` are typed by the client on the public page, so escape them.
   const subject = `${accepted ? '✅ Proposal accepted' : '✏️ Changes requested'} — ${who}`
   const html =
-    `<p><strong>${who}</strong> ${accepted ? 'accepted a proposal' : 'requested changes to a proposal'}.</p>` +
-    (comment ? `<blockquote style="color:#444">“${comment}”</blockquote>` : '') +
+    `<p><strong>${esc(who)}</strong> ${accepted ? 'accepted a proposal' : 'requested changes to a proposal'}.</p>` +
+    (comment ? `<blockquote style="color:#444">“${esc(comment)}”</blockquote>` : '') +
     `<p><a href="${APP}/clients/${companyId ?? ''}">Open the client in Agency OS →</a></p>`
   return { subject, html }
 }
@@ -74,5 +87,21 @@ export function approvalDecisionEmail(who: string, approved: boolean, title: str
     `<p><strong>${esc(who)}</strong> ${approved ? 'approved' : 'requested changes to'} <strong>${esc(title)}</strong>.</p>` +
     (comment ? `<blockquote style="color:#444">\u201c${esc(comment)}\u201d</blockquote>` : '') +
     `<p><a href="${companyId ? `${APP}/clients/${companyId}` : `${APP}/approvals`}">Open in Agency OS \u2192</a></p>`
+  return { subject, html }
+}
+
+// Client email: "here is your proposal". Sent by the automation when an enquiry is approved
+// (and usable later from the proposal page). Plain, short, one link.
+export function proposalSentEmail(firstName: string | null, title: string, url: string) {
+  const hello = firstName ? `Hi ${esc(firstName)},` : 'Hi,'
+  const subject = `Your proposal from Marmoset: ${title}`
+  const html =
+    `<p>${hello}</p>` +
+    `<p>Thanks for getting in touch. Here is your proposal for <strong>${esc(title)}</strong>.</p>` +
+    `<p><a href="${url}" style="display:inline-block;padding:10px 18px;background:#111;color:#fff;` +
+    `text-decoration:none;border-radius:6px">View your proposal</a></p>` +
+    `<p>You can read it, ask for changes or accept it from that page. Just reply to this email if ` +
+    `you have any questions.</p>` +
+    `<p>Marmoset Digital Media</p>`
   return { subject, html }
 }
